@@ -232,6 +232,7 @@ const INITIAL_FACILITY: Facility = Facility {
     systems_state: INITIAL_SYSTEM_STATE
 };
 
+struct Ui ();
 
 fn main() {
 
@@ -244,104 +245,108 @@ fn main() {
 
 }
 
-fn print_heading(heading: &str) {
-    println!("");
-    println!("{:=^40}", "");
-    println!("{:^40}", String::from(heading).to_uppercase());
-    println!("{:=^40}", "");
-}
-
-fn print_subheading(heading: &str) {
-    println!("");
-    println!("{:-^40}", "");
-    println!("{heading:^40}");
-    println!("{:-^40}", "");
-}
-
-fn prompt_user(label: &str) -> String {
-    loop {
-
-        println!("{label}: ");
-
-        let mut buf = String::from("");
-
-        let result = std::io::stdin().read_line(&mut buf);
-        if ! result.is_ok() {
-            print_error_msg("An error occurred. Please try again!");
-            continue;
-        }
-
-        return String::from(buf.trim());
+impl Ui {
+    fn print_heading(heading: &str) {
+        println!("");
+        println!("{:=^40}", "");
+        println!("{:^40}", String::from(heading).to_uppercase());
+        println!("{:=^40}", "");
     }
-}
 
-fn prompt_user_option(label: &str, max_option: MenuOption) -> MenuOption {
-
-    loop {
-
-        let input = prompt_user(label);
-
-        let result = input.parse::<MenuOption>();
-        if ! result.is_ok() {
-            print_error_msg("Invalid input. Please try again");
-            continue;
-        }
-
-        let option: MenuOption = result.expect("Invalid input");
-        if option > max_option {
-            print_error_msg(&std::format!(
-                "Invalid option {option}. MenuOption must be between 1 and {max_option}"));
-            continue;
-        }
-
-        return option;
+    fn print_subheading(heading: &str) {
+        println!("");
+        println!("{:-^40}", "");
+        println!("{heading:^40}");
+        println!("{:-^40}", "");
     }
-}
 
-fn prompt_user_char(label: &str) -> char {
+    fn prompt_user(label: &str) -> String {
+        loop {
 
-    loop {
-        let input_char = prompt_user(label);
+            println!("{label}: ");
 
-        if input_char.len() != 1 {
-            print_error_msg("Invalid input: Please enter a character to continue");
-            continue;
+            let mut buf = String::from("");
+
+            let result = std::io::stdin().read_line(&mut buf);
+            if ! result.is_ok() {
+                Ui::print_error_msg("An error occurred. Please try again!");
+                continue;
+            }
+
+            return String::from(buf.trim());
         }
-
-        let input_char = input_char.clone().chars().next();
-
-        return input_char.expect("Invalid input");
     }
-}
 
-fn print_info_msg(msg: &str) {
-    println!("\n[INFO] {msg}\n");
-}
+    fn prompt_user_option(label: &str, max_option: MenuOption) -> MenuOption {
 
-fn print_error_msg(msg: &str) {
-    println!("\n[ERROR] {msg}\n");
-}
+        loop {
 
-fn confirm_action(info: &str) -> bool {
+            let input = Ui::prompt_user(label);
 
-    loop {
+            let result = input.parse::<MenuOption>();
+            if ! result.is_ok() {
+                Ui::print_error_msg("Invalid input. Please try again");
+                continue;
+            }
 
-        let input = prompt_user(&std::format!(
-            "{info}. Do you wish to contine? [Y/N]"));
+            let option: MenuOption = result.expect("Invalid input");
+            if option > max_option {
+                Ui::print_error_msg(&std::format!(
+                    "Invalid option {option}. MenuOption must be between 1 and {max_option}"));
+                continue;
+            }
 
-        if input == "y" || input == "yes" { return true; }
-        else if input == "n" || input == "no" { return false; }
-
-        print_error_msg("Invalid input. Please try again!");
+            return option;
+        }
     }
+
+    fn prompt_user_char(label: &str) -> char {
+
+        loop {
+            let input_char = Ui::prompt_user(label);
+
+            if input_char.len() != 1 {
+                Ui::print_error_msg("Invalid input: Please enter a character to continue");
+                continue;
+            }
+
+            let input_char = input_char.clone().chars().next();
+
+            return input_char.expect("Invalid input");
+        }
+    }
+
+    fn print_info_msg(msg: &str) {
+        println!("\n[INFO] {msg}\n");
+    }
+
+    fn print_error_msg(msg: &str) {
+        println!("\n[ERROR] {msg}\n");
+    }
+
+    fn confirm_action(info: &str) -> bool {
+
+        loop {
+
+            let input = Ui::prompt_user(&std::format!(
+                "{info}. Do you wish to contine? [Y/N]"));
+            
+            if input == "y" || input == "yes" { return true; }
+            else if input == "n" || input == "no" { return false; }
+
+            Ui::print_error_msg("Invalid input. Please try again!");
+        }
+    }
+
+
 }
 
 fn get_main_menu_option() -> MenuOption {
 
-    print_heading("Blackout Protocol - Main Menu");
+    Ui::print_heading("Blackout Protocol - Main Menu");
     println!("{MAIN_MENU}");
 
-    prompt_user_option("Select an option", MAX_MAIN_MENU_OPTION)
+    Ui::prompt_user_option("Select an option", MAX_MAIN_MENU_OPTION)
 }
 
 fn handle_main_menu_option(option: MenuOption, facility: &mut Facility) {
@@ -351,22 +356,22 @@ fn handle_main_menu_option(option: MenuOption, facility: &mut Facility) {
         2 => main_menu_view_mission_briefing(),
         3 => main_menu_view_instructions(),
         4 => main_menu_exit_application(),
-        _ => print_error_msg(&std::format!("Unknown option: {option}")),
+        _ => Ui::print_error_msg(&std::format!("Unknown option: {option}")),
     }
 }
 
 fn main_menu_exit_application() {
-    print_info_msg("Exiting application. Bye...");
+    Ui::print_info_msg("Exiting application. Bye...");
     exit(0);
 }
 
 fn main_menu_view_mission_briefing() {
-    print_heading("Mission Briefing");
+    Ui::print_heading("Mission Briefing");
     println!("{MISSION_BRIEFING}");
 }
 
 fn main_menu_view_instructions() {
-    print_heading("How to Play");
+    Ui::print_heading("How to Play");
     println!("{INSTRUCTIONS}");
 }
 
@@ -446,11 +451,11 @@ Occupants Evacuated: {}
             systems_state 
         } = self;
 
-        print_heading("Facility Inspection Report");
+        Ui::print_heading("Facility Inspection Report");
 
         // System State
 
-        print_subheading("System State");
+        Ui::print_subheading("System State");
         println!(
             "
     Life Support:       {}
@@ -466,7 +471,7 @@ Occupants Evacuated: {}
 
         // Resources
 
-        print_subheading("Resources");
+        Ui::print_subheading("Resources");
         println!(
             "
     Time:               {} minutes
@@ -478,7 +483,7 @@ Occupants Evacuated: {}
 
         // Mission Progress
 
-        print_subheading("Mission Progress");
+        Ui::print_subheading("Mission Progress");
         println!(
             "
     Occupants Remaining: {}
@@ -490,7 +495,7 @@ Occupants Evacuated: {}
             self.get_time_elapsed()
         );
 
-        print_subheading("Summary");
+        Ui::print_subheading("Summary");
         println!(
             "
     Evacuation Possible:    {}
@@ -653,7 +658,7 @@ Occupants Evacuated: {}
 
 fn mission_start_new(facility: &mut Facility) {
 
-    print_heading("Mission Initial Status");
+    Ui::print_heading("Mission Initial Status");
     INITIAL_FACILITY.print();
 
     facility.reset();
@@ -673,12 +678,12 @@ fn mission_start_new(facility: &mut Facility) {
         }
 
         if mission_is_mission_successful(facility) {
-            print_info_msg("Mission Successful!");
+            Ui::print_info_msg("Mission Successful!");
 
             let mission_score = mission_calculate_mission_score(facility);
             let mission_score_grade = mission_get_mission_score_grade(mission_score);
 
-            print_heading(&std::format!(
+            Ui::print_heading(&std::format!(
                 "You scored {mission_score}%. {mission_score_grade}"));
             return;
         }
@@ -689,12 +694,12 @@ fn mission_start_new(facility: &mut Facility) {
 
 fn get_mission_option(remaining_time_mins: u32) -> MenuOption {
 
-    print_heading("Blackout Protocol - Mission On");
+    Ui::print_heading("Blackout Protocol - Mission On");
     println!("{MISSION_MENU}");
 
-    print_info_msg(&std::format!("{remaining_time_mins} minutes remaining"));
+    Ui::print_info_msg(&std::format!("{remaining_time_mins} minutes remaining"));
 
-    prompt_user_option("Choose an action", MAX_MISSION_MENU_OPTION)
+    Ui::prompt_user_option("Choose an action", MAX_MISSION_MENU_OPTION)
 }
 
 fn handle_mission_option(option: MenuOption, facility: &mut Facility) {
@@ -706,7 +711,7 @@ fn handle_mission_option(option: MenuOption, facility: &mut Facility) {
         4 => mission_manage_emergency_power(facility),
         5 => mission_evacuate_occupants(facility),
         6 => mission_end_mission(facility),
-        _ => print_error_msg(&std::format!("Unknown option: {option}")),
+        _ => Ui::print_error_msg(&std::format!("Unknown option: {option}")),
     }
 }
 
@@ -714,7 +719,7 @@ fn mission_inspect_facility(facility: &mut Facility) {
 
     const TIME_COST: u32 = 2;
 
-    let confirm = confirm_action(&std::format!("This action cost {TIME_COST} minutes"));
+    let confirm = Ui::confirm_action(&std::format!("This action cost {TIME_COST} minutes"));
 
     if confirm {
         facility.decrease_time(TIME_COST);
@@ -772,13 +777,13 @@ fn mission_restore_system(facility: &mut Facility) {
         println!("{evacuation_lift_option}");
     }
 
-    print_info_msg("Enter 'X' to cancel\n");
+    Ui::print_info_msg("Enter 'X' to cancel\n");
 
     loop {
-        let option_char = prompt_user_char("Select system");
+        let option_char = Ui::prompt_user_char("Select system");
 
         if option_char == 'X' {
-            print_info_msg("Operation Cancelled");
+            Ui::print_info_msg("Operation Cancelled");
             return;
         }
 
@@ -786,22 +791,22 @@ fn mission_restore_system(facility: &mut Facility) {
             match option_char {
                 'L' => {
                     facility.shutdown_life_support();
-                    print_error_msg("The life support system damaged during restoration");
+                    Ui::print_error_msg("The life support system damaged during restoration");
                 },
                 'C' => {
                     facility.shutdown_communication();
-                    print_error_msg("The communication system damaged during restoration");
+                    Ui::print_error_msg("The communication system damaged during restoration");
                 },
                 'S' => {
                     facility.shutdown_security();
-                    print_error_msg("The security system damaged during restoration");
+                    Ui::print_error_msg("The security system damaged during restoration");
                 },
                 'E' => {
                     facility.shutdown_evacuation_lift();
-                    print_error_msg("The evacuation system damaged during restoration");
+                    Ui::print_error_msg("The evacuation system damaged during restoration");
                 },
                 _   => {
-                    print_error_msg(&std::format!(
+                    Ui::print_error_msg(&std::format!(
                         "Invalid input [{option_char}]. Please try again!"));
                     continue;
                 }
@@ -818,7 +823,7 @@ fn mission_restore_system(facility: &mut Facility) {
 
                 facility.restore_life_support();
 
-                print_info_msg("The life support system is now restored and fully online!");
+                Ui::print_info_msg("The life support system is now restored and fully online!");
             },
             'C' => {
                 facility.decrease_fuel(5);
@@ -827,7 +832,7 @@ fn mission_restore_system(facility: &mut Facility) {
 
                 facility.restore_communication();
 
-                print_info_msg("The communication system is now restored and fully online!");
+                Ui::print_info_msg("The communication system is now restored and fully online!");
             },
             'S' => {
                 facility.decrease_fuel(6);
@@ -836,7 +841,7 @@ fn mission_restore_system(facility: &mut Facility) {
 
                 facility.restore_security();
 
-                print_info_msg("The security system is now restored and fully online!");
+                Ui::print_info_msg("The security system is now restored and fully online!");
             },
             'E' => {
                 facility.decrease_fuel(10);
@@ -845,10 +850,10 @@ fn mission_restore_system(facility: &mut Facility) {
 
                 facility.restore_evacuation_lift();
 
-                print_info_msg("The evacuation lift system is now restored and fully online!");
+                Ui::print_info_msg("The evacuation lift system is now restored and fully online!");
             },
             _   => {
-                print_error_msg(&std::format!(
+                Ui::print_error_msg(&std::format!(
                     "Invalid input [{option_char}]. Please try again!"));
                 continue;
             }
@@ -864,7 +869,7 @@ fn mission_repair_system(facility: &mut Facility) {
 
     let mut repair_system_options = String::from("");
 
-    print_subheading("Damaged Systems");
+    Ui::print_subheading("Damaged Systems");
 
     if facility.is_life_support_damaged() {
         println!("[L] Life Support");
@@ -887,29 +892,29 @@ fn mission_repair_system(facility: &mut Facility) {
     }
 
     if repair_system_options.is_empty() {
-        print_info_msg("No damaged system found");
+        Ui::print_info_msg("No damaged system found");
         return;
     }
 
-    print_info_msg("Enter 'X' to Cancel");
+    Ui::print_info_msg("Enter 'X' to Cancel");
 
     loop {
 
-        let option_char = prompt_user_char("Select system");
+        let option_char = Ui::prompt_user_char("Select system");
 
         if option_char == 'X' {
-            print_info_msg("Operation Cancelled");
+            Ui::print_info_msg("Operation Cancelled");
             return;
         }
 
         if ! repair_system_options.contains(option_char) {
-            print_error_msg("Invalid option. Please try again!");
+            Ui::print_error_msg("Invalid option. Please try again!");
             continue;
         }
 
-        let confirm = confirm_action("This will cost 4 fuel units, 5 emergency power units, and 3 minutes");
+        let confirm = Ui::confirm_action("This will cost 4 fuel units, 5 emergency power units, and 3 minutes");
         if ! confirm {
-            print_info_msg("Operation Cancelled");
+            Ui::print_info_msg("Operation Cancelled");
             return;
         }
 
@@ -923,13 +928,13 @@ fn mission_repair_system(facility: &mut Facility) {
             'S' => facility.repair_security(),
             'E' => facility.repair_evacuation_lift(),
             _   => {
-                print_info_msg(&std::format!(
+                Ui::print_info_msg(&std::format!(
                     "Invalid input: {option_char}. Please try again!"));
                 continue;
             }
         }
 
-        print_info_msg("System repaired. You may now restore it.");
+        Ui::print_info_msg("System repaired. You may now restore it.");
         return;
     }
 
@@ -950,15 +955,15 @@ fn mission_manage_emergency_power(facility: &mut Facility) {
 
     println!("{MANAGE_EMERGENCY_POWER_MENU}");
 
-    let option = prompt_user_option("Choose an option", 2);
+    let option = Ui::prompt_user_option("Choose an option", 2);
 
     match option {
         1   => {
             // Conserve power
 
-            let confirm = confirm_action("This takes 5 fuel units and 2 minutes");
+            let confirm = Ui::confirm_action("This takes 5 fuel units and 2 minutes");
             if ! confirm {
-                print_info_msg("Operation Cancelled!");
+                Ui::print_info_msg("Operation Cancelled!");
                 return;
             }
 
@@ -970,9 +975,9 @@ fn mission_manage_emergency_power(facility: &mut Facility) {
 
             // Shutdown nonessential systems
 
-            let confirm = confirm_action("This takes 10 fuel units and 2 minutes, and shuts down the security system");
+            let confirm = Ui::confirm_action("This takes 10 fuel units and 2 minutes, and shuts down the security system");
             if ! confirm {
-                print_info_msg("Operation Cancelled!");
+                Ui::print_info_msg("Operation Cancelled!");
                 return;
             }
 
@@ -982,7 +987,7 @@ fn mission_manage_emergency_power(facility: &mut Facility) {
             facility.shutdown_security();
 
         },
-        _   => print_error_msg(&std::format!("Unknown option: {option}. Please try again!"))
+        _   => Ui::print_error_msg(&std::format!("Unknown option: {option}. Please try again!"))
     }
 
 }
@@ -990,32 +995,32 @@ fn mission_manage_emergency_power(facility: &mut Facility) {
 fn mission_evacuate_occupants(facility: &mut Facility) {
 
     if ! facility.is_communication_online() {
-        print_error_msg("Failed to evacuate: Communications is not online");
+        Ui::print_error_msg("Failed to evacuate: Communications is not online");
         return;
     }
 
     if ! facility.is_evacuation_lift_online() {
-        print_error_msg("Failed to evacuate: Evacuation lift is not online");
+        Ui::print_error_msg("Failed to evacuate: Evacuation lift is not online");
         return;
     }
 
     if ! facility.is_life_support_online() {
-        print_error_msg("Failed to evacuate: Life support is not online");
+        Ui::print_error_msg("Failed to evacuate: Life support is not online");
         return;
     }
 
     if ! facility.is_security_online() {
-        print_error_msg("Failed to evacuate: Security is not online");
+        Ui::print_error_msg("Failed to evacuate: Security is not online");
         return;
     }
 
     if ! (facility.resources.fuel >= 5) {
-        print_error_msg("Failed to evacuate: Insufficient fuel");
+        Ui::print_error_msg("Failed to evacuate: Insufficient fuel");
         return;
     }
 
     if ! (facility.resources.emergency_power >= 10) {
-        print_error_msg("Failed to evacuate: Insufficient emergency power");
+        Ui::print_error_msg("Failed to evacuate: Insufficient emergency power");
         return;
     }
 
@@ -1027,7 +1032,7 @@ fn mission_evacuate_occupants(facility: &mut Facility) {
 
     facility.evacuate_occupants(MAX_OCCUPANTS_PER_EVACUATION);
 
-    print_info_msg(&std::format!(
+    Ui::print_info_msg(&std::format!(
         "Evacuated {MAX_OCCUPANTS_PER_EVACUATION} persons successfully! Remaining {} occupants",
             facility.n_remaining_occupants)
         );
@@ -1042,7 +1047,7 @@ fn mission_end_mission(facility: &Facility) {
 fn mission_print_mission_failed_debrief_report(
     reason: &str, facility: &Facility
 ) {
-    print_heading(reason);
+    Ui::print_heading(reason);
     facility.print();
 }
 
