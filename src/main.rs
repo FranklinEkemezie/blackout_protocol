@@ -233,6 +233,7 @@ const INITIAL_FACILITY: Facility = Facility {
 };
 
 struct Ui ();
+struct MainMenu ();
 
 fn main() {
 
@@ -240,7 +241,7 @@ fn main() {
     let mut facility = INITIAL_FACILITY;
 
     loop {
-        handle_main_menu_option(get_main_menu_option(), &mut facility);
+        MainMenu::handle_option(MainMenu::get_option(), &mut facility);
     }
 
 }
@@ -341,38 +342,40 @@ impl Ui {
 
 }
 
-fn get_main_menu_option() -> MenuOption {
+impl MainMenu {
+    fn get_option() -> MenuOption {
 
-    Ui::print_heading("Blackout Protocol - Main Menu");
-    println!("{MAIN_MENU}");
+        Ui::print_heading("Blackout Protocol - Main Menu");
+        println!("{MAIN_MENU}");
 
-    Ui::prompt_user_option("Select an option", MAX_MAIN_MENU_OPTION)
-}
-
-fn handle_main_menu_option(option: MenuOption, facility: &mut Facility) {
-
-    match option {
-        1 => mission_start_new(facility),
-        2 => main_menu_view_mission_briefing(),
-        3 => main_menu_view_instructions(),
-        4 => main_menu_exit_application(),
-        _ => Ui::print_error_msg(&std::format!("Unknown option: {option}")),
+        Ui::prompt_user_option("Select an option", MAX_MAIN_MENU_OPTION)
     }
-}
 
-fn main_menu_exit_application() {
-    Ui::print_info_msg("Exiting application. Bye...");
-    exit(0);
-}
+    fn handle_option(option: MenuOption, facility: &mut Facility) {
 
-fn main_menu_view_mission_briefing() {
-    Ui::print_heading("Mission Briefing");
-    println!("{MISSION_BRIEFING}");
-}
+        match option {
+            1 => mission_start_new(facility),
+            2 => MainMenu::view_mission_briefing(),
+            3 => MainMenu::view_instructions(),
+            4 => MainMenu::exit_application(),
+            _ => Ui::print_error_msg(&std::format!("Unknown option: {option}")),
+        }
+    }
 
-fn main_menu_view_instructions() {
-    Ui::print_heading("How to Play");
-    println!("{INSTRUCTIONS}");
+    fn exit_application() {
+        Ui::print_info_msg("Exiting application. Bye...");
+        exit(0);
+    }
+
+    fn view_mission_briefing() {
+        Ui::print_heading("Mission Briefing");
+        println!("{MISSION_BRIEFING}");
+    }
+
+    fn view_instructions() {
+        Ui::print_heading("How to Play");
+        println!("{INSTRUCTIONS}");
+    }
 }
 
 impl SystemStatus {
