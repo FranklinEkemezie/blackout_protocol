@@ -203,6 +203,121 @@ mod app {
         }
 
         #[test]
+        fn new_mission_is_not_failed() {
+            assert!(!Mission::is_mission_failed(&facility()));
+        }
+
+        #[test]
+        fn mission_fails_when_fuel_is_exhausted() {
+            let mut f = facility();
+            f.resources.fuel = 0;
+
+            assert!(Mission::is_mission_failed(&f));
+            assert_eq!(Mission::mission_failed_reason(&f), "You are out of fuel");
+        }
+
+        #[test]
+        fn mission_fails_when_emergency_power_is_exhausted() {
+            let mut f = facility();
+            f.resources.emergency_power = 0;
+
+            assert!(Mission::is_mission_failed(&f));
+            assert_eq!(
+                Mission::mission_failed_reason(&f),
+                "You are out of emergency power"
+            );
+        }
+
+        #[test]
+        fn mission_fails_when_time_limit_is_reached() {
+            let mut f = facility();
+            f.resources.time = 0;
+
+            assert!(Mission::is_mission_failed(&f));
+            assert_eq!(Mission::mission_failed_reason(&f), "Time is up");
+        }
+
+        #[test]
+        fn mission_fails_when_life_support_is_damaged() {
+            let mut f = facility();
+            f.systems_state.life_support = SystemStatus::Damaged;
+
+            assert!(Mission::is_mission_failed(&f));
+            assert_eq!(
+                Mission::mission_failed_reason(&f),
+                "Life support is broken"
+            );
+        }
+
+        #[test]
+        fn mission_failure_reason_is_empty_when_no_failure_condition_holds() {
+            assert_eq!(Mission::mission_failed_reason(&facility()), "");
+        }
+
+        #[test]
+        fn mission_failure_reason_checks_fuel_first() {
+            let mut f = facility();
+            f.resources.fuel = 0;
+            f.resources.emergency_power = 0;
+            f.resources.time = 0;
+            f.systems_state.life_support = SystemStatus::Damaged;
+
+            assert_eq!(Mission::mission_failed_reason(&f), "You are out of fuel");
+        }
+
+        #[test]
+        fn mission_succeeds_only_after_all_twelve_are_evacuated() {
+            let mut f = facility();
+            assert!(!Mission::is_mission_successful(&f));
+
+            f.evacuate_occupants(4);
+            assert_eq!(f.n_remaining_occupants, 8);
+            assert!(!Mission::is_mission_successful(&f));
+
+            f.evacuate_occupants(4);
+            assert_eq!(f.n_remaining_occupants, 4);
+            assert!(!Mission::is_mission_successful(&f));
+
+            f.evacuate_occupants(4);
+            assert_eq!(f.n_remaining_occupants, 0);
+            assert!(Mission::is_mission_successful(&f));
+        }
+
+        #[test]
+        fn scoring_awards_every_met_criterion() {
+            let mut f = facility();
+            f.n_remaining_occupants = 0;
+            f.resources.time = 10;
+            f.resources.fuel = 30;
+            f.resources.emergency_power = 30;
+
+            assert_eq!(Mission::calculate_mission_score(&f), 100);
+        }
+
+        #[test]
+        fn scoring_awards_only_the_criteria_that_are_met() {
+            let mut f = facility();
+            f.n_remaining_occupants = 0;
+            f.resources.time = 9;
+            f.resources.fuel = 29;
+            f.resources.emergency_power = 29;
+
+            assert_eq!(Mission::calculate_mission_score(&f), 50);
+        }
+
+        #[test]
+        fn scoring_uses_the_classification_thresholds() {
+            assert_eq!(Mission::get_mission_score_grade(100), "Exceptional");
+            assert_eq!(Mission::get_mission_score_grade(90), "Exceptional");
+            assert_eq!(Mission::get_mission_score_grade(89), "Successful");
+            assert_eq!(Mission::get_mission_score_grade(70), "Successful");
+            assert_eq!(Mission::get_mission_score_grade(69), "Marginal");
+            assert_eq!(Mission::get_mission_score_grade(50), "Marginal");
+            assert_eq!(Mission::get_mission_score_grade(49), "Poor");
+            assert_eq!(Mission::get_mission_score_grade(0), "Poor");
+        }
+
+        #[test]
         fn reset_returns_the_facility_to_its_initial_state() {
             let mut f = facility();
             f.resources.fuel = 1;
