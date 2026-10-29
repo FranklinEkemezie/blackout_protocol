@@ -7,7 +7,7 @@ const SYSTEM_ONLINE:    SystemState = 1;
 const SYSTEM_OFFLINE:   SystemState = 2;
 const SYSTEM_DAMAGED:   SystemState = 3;
 
-type Option = u8;
+type MenuOption = u8;
 
 // Main Menu
 
@@ -17,7 +17,7 @@ const MAIN_MENU: &str = "
 3. View Instructions
 4. Exit
 ";
-const MAX_MAIN_MENU_OPTION: Option = 4;
+const MAX_MAIN_MENU_OPTION: MenuOption = 4;
 
 const MISSION_MENU: &str = "
 1. Inspect Facility
@@ -27,7 +27,7 @@ const MISSION_MENU: &str = "
 5. Evacuate Occupants
 6. End Mission
 ";
-const MAX_MISSION_MENU_OPTION: Option = 6;
+const MAX_MISSION_MENU_OPTION: MenuOption = 6;
 
 const MISSION_BRIEFING: &str = "
 
@@ -268,22 +268,22 @@ fn prompt_user(label: &str) -> String {
     }
 }
 
-fn prompt_user_option(label: &str, max_option: Option) -> Option {
+fn prompt_user_option(label: &str, max_option: MenuOption) -> MenuOption {
 
     loop {
 
         let input = prompt_user(label);
 
-        let result = input.parse::<Option>();
+        let result = input.parse::<MenuOption>();
         if ! result.is_ok() {
             print_error_msg("Invalid input. Please try again");
             continue;
         }
 
-        let option: Option = result.expect("Invalid input");
+        let option: MenuOption = result.expect("Invalid input");
         if option > max_option {
             print_error_msg(&std::format!(
-                "Invalid option {option}. Option must be between 1 and {max_option}"));
+                "Invalid option {option}. MenuOption must be between 1 and {max_option}"));
             continue;
         }
 
@@ -315,7 +315,7 @@ fn print_error_msg(msg: &str) {
     println!("\n[ERROR] {msg}\n");
 }
 
-fn get_main_menu_option() -> Option {
+fn get_main_menu_option() -> MenuOption {
 
     print_heading("Blackout Protocol - Main Menu");
     println!("{MAIN_MENU}");
@@ -323,7 +323,7 @@ fn get_main_menu_option() -> Option {
     prompt_user_option("Select an option", MAX_MAIN_MENU_OPTION)
 }
 
-fn handle_main_menu_option(option: Option, facility_status: &mut FacilityStatus) {
+fn handle_main_menu_option(option: MenuOption, facility_status: &mut FacilityStatus) {
 
     match option {
         1 => main_menu_start_new_mission(facility_status),
@@ -428,7 +428,7 @@ fn main_menu_start_new_mission(facility_status: &mut FacilityStatus) {
 
 }
 
-fn get_mission_option(remaining_time_mins: u8) -> Option {
+fn get_mission_option(remaining_time_mins: u8) -> MenuOption {
 
     print_heading("Blackout Protocol - Mission On");
     println!("{MISSION_MENU}");
@@ -438,7 +438,7 @@ fn get_mission_option(remaining_time_mins: u8) -> Option {
     prompt_user_option("Choose an action", MAX_MISSION_MENU_OPTION)
 }
 
-fn handle_mission_option(option: Option, facility_status: &mut FacilityStatus) {
+fn handle_mission_option(option: MenuOption, facility_status: &mut FacilityStatus) {
 
     match option {
         1 => mission_inspect_facility(facility_status),
@@ -504,7 +504,7 @@ fn mission_inspect_facility(facility_status: &mut FacilityStatus) {
 
 fn mission_restore_system_table_heading() -> String {
     let row = std::format!("|{:^16}|{:^24}|{:^16}|{:^16}|{:^16}|", 
-        "Option", "System", "Fuel Units", "Power Units", "Time");
+        "MenuOption", "System", "Fuel Units", "Power Units", "Time");
     let bottom_border = String::from("_").repeat(row.len());
     let top_border = String::from("—").repeat(row.len());
 
