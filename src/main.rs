@@ -1,11 +1,11 @@
 use std::{cmp::{max, min}, process::exit};
 
 
-type SystemState = u8;
-
-const SYSTEM_ONLINE:    SystemState = 1;
-const SYSTEM_OFFLINE:   SystemState = 2;
-const SYSTEM_DAMAGED:   SystemState = 3;
+enum SystemStatus {
+    Online,
+    Offline,
+    Damaged
+}
 
 type MenuOption = u8;
 
@@ -200,10 +200,10 @@ type Resources = (
 );
 
 type SystemConfiguration = (
-    SystemState,    // life support
-    SystemState,    // communications
-    SystemState,    // security
-    SystemState     // evacuation lift
+    SystemStatus,    // life support
+    SystemStatus,    // communications
+    SystemStatus,    // security
+    SystemStatus     // evacuation lift
 );
 
 type FacilityStatus = (
@@ -215,10 +215,10 @@ type FacilityStatus = (
 const INITIAL_RESOURCES: Resources = (100, 100, 30);
 const INITIAL_OCCUPANTS: u8 = 12;
 const INITIAL_SYSTEMS: SystemConfiguration = (
-    SYSTEM_OFFLINE,
-    SYSTEM_OFFLINE,
-    SYSTEM_ONLINE,
-    SYSTEM_OFFLINE,
+    SystemStatus::Offline,
+    SystemStatus::Offline,
+    SystemStatus::Online,
+    SystemStatus::Offline,
 );
 
 const INITIAL_FACILITY_STATUS: FacilityStatus = (
@@ -349,12 +349,11 @@ fn main_menu_view_instructions() {
     println!("{INSTRUCTIONS}");
 }
 
-fn system_state_get_label(system_state: SystemState) -> String {
+fn system_state_get_label(system_state: &SystemStatus) -> String {
     match system_state {
-        SYSTEM_ONLINE   => String::from("Online"),
-        SYSTEM_OFFLINE  => String::from("Offline"),
-        SYSTEM_DAMAGED  => String::from("Damaged"),
-        _               => String::from("Unknown")
+        SystemStatus::Online   => String::from("Online"),
+        SystemStatus::Offline  => String::from("Offline"),
+        SystemStatus::Damaged  => String::from("Damaged"),
     }
 }
 
@@ -384,10 +383,10 @@ Occupants Evacuated: {}
         resources.1, 
         resources.0,
 
-        system_state_get_label(system_config.0),
-        system_state_get_label(system_config.1),
-        system_state_get_label(system_config.2),
-        system_state_get_label(system_config.3),
+        system_state_get_label(&system_config.0),
+        system_state_get_label(&system_config.1),
+        system_state_get_label(&system_config.2),
+        system_state_get_label(&system_config.3),
 
         remaining_occupants, facility_status_get_evacuated_occupants(facility_status)
     );
@@ -836,9 +835,11 @@ fn mission_is_mission_failed(facility_status: &FacilityStatus) -> bool {
 
     if  resources.0 == 0 ||     // fuel reaches zero
         resources.1 == 0 ||     // emergency power reaches zero
-        resources.2 == 0 ||     // time remaining reaches zero
-        system_config.0  == SYSTEM_DAMAGED  // life support is damaged
+        resources.2 == 0        // time remaining reaches zero
         { return true; }
+
+    // life support is damaged
+    let SystemStatus::Damaged = system_config.0 else { return true; };
 
     // the player still has enough resources, mission is still on, 
     // so it is not failed
@@ -860,9 +861,9 @@ fn mission_mission_failed_reason(facility_status: &FacilityStatus) -> String {
         return String::from("Time is up");
     }
 
-    if facility_status.2.0 == SYSTEM_DAMAGED {
+    let SystemStatus::Damaged = facility_status.2.0 else {
         return String::from("Life support is broken");
-    }
+    };
 
     return String::from("");
 }
@@ -924,10 +925,10 @@ Communications:     {}
 Security:           {}
 Evacuation Lift:    {}
     ",
-    system_state_get_label(system_config.0),
-    system_state_get_label(system_config.1),
-    system_state_get_label(system_config.2),
-    system_state_get_label(system_config.3),
+    system_state_get_label(&system_config.0),
+    system_state_get_label(&system_config.1),
+    system_state_get_label(&system_config.2),
+    system_state_get_label(&system_config.3),
     );
 
     // Resources
@@ -971,51 +972,51 @@ Remaining Time:         {} minutes
 }
 
 fn facility_status_is_life_support_online(facility_status: &FacilityStatus) -> bool {
-    facility_status.2.0 == SYSTEM_ONLINE
+    if let SystemStatus::Online = facility_status.2.0 { return true; } else { return false; }
 }
 
 fn facility_status_is_life_support_offline(facility_status: &FacilityStatus) -> bool {
-    facility_status.2.0 == SYSTEM_OFFLINE
+    if let SystemStatus::Offline = facility_status.2.0 { return true; } else { return false; }
 }
 
 fn facility_status_is_life_support_damaged(facility_status: &FacilityStatus) -> bool {
-    facility_status.2.0 == SYSTEM_DAMAGED
+    if let SystemStatus::Damaged = facility_status.2.0 { return true; } else { return false; }
 }
 
 fn facility_status_is_communication_online(facility_status: &FacilityStatus) -> bool {
-    facility_status.2.1 == SYSTEM_ONLINE
+    if let SystemStatus::Online = facility_status.2.1 { return true; } else { return false; }
 }
 
 fn facility_status_is_communication_offline(facility_status: &FacilityStatus) -> bool {
-    facility_status.2.1 == SYSTEM_OFFLINE
+    if let SystemStatus::Offline = facility_status.2.1 { return true; } else { return false; }
 }
 
 fn facility_status_is_communication_damaged(facility_status: &FacilityStatus) -> bool {
-    facility_status.2.1 == SYSTEM_DAMAGED
+    if let SystemStatus::Damaged = facility_status.2.1 { return true; } else { return false; }
 }
 
 fn facility_status_is_security_online(facility_status: &FacilityStatus) -> bool {
-    facility_status.2.2 == SYSTEM_ONLINE
+    if let SystemStatus::Online = facility_status.2.2 { return true; } else { return false; }
 }
 
 fn facility_status_is_security_offline(facility_status: &FacilityStatus) -> bool {
-    facility_status.2.2 == SYSTEM_OFFLINE
+    if let SystemStatus::Offline = facility_status.2.2 { return true; } else { return false; }
 }
 
 fn facility_status_is_security_damaged(facility_status: &FacilityStatus) -> bool {
-    facility_status.2.2 == SYSTEM_DAMAGED
+    if let SystemStatus::Damaged = facility_status.2.2 { return true; } else { return false; }
 }
 
 fn facility_status_is_evacuation_lift_online(facility_status: &FacilityStatus) -> bool {
-    facility_status.2.3 == SYSTEM_ONLINE
+    if let SystemStatus::Online = facility_status.2.3 { return true; } else { return false; }
 }
 
 fn facility_status_is_evacuation_lift_offline(facility_status: &FacilityStatus) -> bool {
-    facility_status.2.3 == SYSTEM_OFFLINE
+    if let SystemStatus::Offline = facility_status.2.3 { return true; } else { return false; }
 }
 
 fn facility_status_is_evacuation_lift_damaged(facility_status: &FacilityStatus) -> bool {
-    facility_status.2.3 == SYSTEM_DAMAGED
+    if let SystemStatus::Damaged = facility_status.2.3 { return true; } else { return false; }
 }
 
 fn facility_status_get_time_elapsed(facility_status: &FacilityStatus) -> u8 {
@@ -1032,83 +1033,83 @@ fn facility_status_is_evacuation_possible(facility_status: &FacilityStatus) -> b
 }
 
 fn facility_status_restore_life_support(facility_status: &mut FacilityStatus) {
-    if facility_status.2.0 != SYSTEM_OFFLINE {
+    let SystemStatus::Offline = facility_status.2.0 else {
         panic!("The system must be offlined to be restored");
-    }
+    };
 
-    facility_status.2.0 = SYSTEM_ONLINE;
+    facility_status.2.0 = SystemStatus::Offline;
 }
 
 fn facility_status_repair_life_support(facility_status: &mut FacilityStatus) {
-    if facility_status.2.0 != SYSTEM_DAMAGED {
+    let SystemStatus::Damaged = facility_status.2.0 else {
         panic!("The system must be damaged to be repaired");
-    }
+    };
 
-    facility_status.2.0 = SYSTEM_OFFLINE;
+    facility_status.2.0 = SystemStatus::Offline;
 }
 
 fn facility_status_shutdown_life_support(facility_status: &mut FacilityStatus) {
-    facility_status.2.0 = SYSTEM_DAMAGED;
+    facility_status.2.0 = SystemStatus::Damaged;
 }
 
 fn facility_status_restore_communication(facility_status: &mut FacilityStatus) {
-    if facility_status.2.1 != SYSTEM_OFFLINE {
+    let SystemStatus::Offline = facility_status.2.1 else {
         panic!("The system must be offlined to be restored");
-    }
+    };
 
-    facility_status.2.1 = SYSTEM_ONLINE;
+    facility_status.2.1 = SystemStatus::Online;
 }
 
 fn facility_status_repair_communication(facility_status: &mut FacilityStatus) {
-    if facility_status.2.1 != SYSTEM_DAMAGED {
+    let SystemStatus::Damaged = facility_status.2.1 else {
         panic!("The system must be damaged to be repaired");
-    }
+    };
 
-    facility_status.2.1 = SYSTEM_OFFLINE;
+    facility_status.2.1 = SystemStatus::Offline;
 }
 
 fn facility_status_shutdown_communication(facility_status: &mut FacilityStatus) {
-    facility_status.2.1 = SYSTEM_DAMAGED;
+    facility_status.2.1 = SystemStatus::Damaged;
 }
 
 fn facility_status_restore_security(facility_status: &mut FacilityStatus) {
-    if facility_status.2.2 != SYSTEM_OFFLINE {
+    let SystemStatus::Offline = facility_status.2.2 else {
         panic!("The system must be offlined to be restored");
-    }
+    };
 
-    facility_status.2.2 = SYSTEM_ONLINE;
+    facility_status.2.2 = SystemStatus::Online;
 }
 
 fn facility_status_repair_security(facility_status: &mut FacilityStatus) {
-    if facility_status.2.3 != SYSTEM_DAMAGED {
+    let SystemStatus::Damaged = facility_status.2.3 else {
         panic!("The system must be damaged to be repaired");
-    }
+    };
 
-    facility_status.2.3 = SYSTEM_OFFLINE;
+    facility_status.2.3 = SystemStatus::Offline;
 }
 
 fn facility_status_shutdown_security(facility_status: &mut FacilityStatus) {
-    facility_status.2.2 = SYSTEM_DAMAGED;
+    facility_status.2.2 = SystemStatus::Damaged;
 }
 
 fn facility_status_restore_evacuation_lift(facility_status: &mut FacilityStatus) {
-    if facility_status.2.3 != SYSTEM_OFFLINE {
+    let SystemStatus::Offline = facility_status.2.3 else {
         panic!("The system must be offlined to be restored");
-    }
+    };
 
-    facility_status.2.3 = SYSTEM_ONLINE;
+    facility_status.2.3 = SystemStatus::Online;
 }
 
 fn facility_status_repair_evacuation_lift(facility_status: &mut FacilityStatus) {
-    if facility_status.2.3 != SYSTEM_DAMAGED {
+    let SystemStatus::Damaged = facility_status.2.3 else {
         panic!("The system must be damaged to be repaired");
-    }
+    };
 
-    facility_status.2.3 = SYSTEM_OFFLINE;
+    facility_status.2.3 = SystemStatus::Offline;
 }
 
 fn facility_status_shutdown_evacuation_lift(facility_status: &mut FacilityStatus) {
-    facility_status.2.3 = SYSTEM_DAMAGED;
+    facility_status.2.3 = SystemStatus::Damaged;
 }
 
 fn facility_status_evacuate_occupants(facility_status: &mut FacilityStatus, occupants: u8) {
