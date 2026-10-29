@@ -6,7 +6,8 @@ Terminal-based tactical simulation written in Rust.
 
 - `src/main.rs` — game logic and terminal UI
 - `tests/spec.rs` — deterministic regression tests
-- `SPECS.md` — project specification
+- `docs/SPECS.md` — project specification
+- `docs/BUGS.md` — known specification deviations
 
 ## Run
 
@@ -23,5 +24,5 @@ cargo test
 ## Notes
 
 - Standard library only.
-- Mission state is tracked with tuples and constants.
+- Mission state is tracked with structs and an enum-backed system status.
 - The code is organized for incremental exercises and spec-based checks.

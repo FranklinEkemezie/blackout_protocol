@@ -57,7 +57,7 @@ For the initial version, represent these states using integer constants rather t
 
 For example, you could assign a different integer to each state and use `match` to interpret it.
 
-Do not use `struct`, `enum`, or `Vec<T>` in this version.
+The initial version does not use `struct`, custom `enum`, or `Vec<T>`. The second iteration deliberately replaces the integer constants with a `SystemStatus` enum and introduces the structs described in Section 17.
 
 ---
 
@@ -415,6 +415,8 @@ An invalid input must not consume fuel, consume emergency power, advance time, o
 
 Implement the initial version using only concepts covered in Chapters 1–4 of The Rust Programming Language.
 
+> **Scope of the restrictions:** the restrictions below describe the initial version only. The second iteration (Section 17) explicitly relaxes the struct and enum restrictions as part of the learning progression. All other restrictions, including standard-library-only dependencies and no unsafe Rust, continue to apply.
+
 ### Required language features
 
 Use:
@@ -434,7 +436,7 @@ Use:
 
 ### Restrictions
 
-Do not use:
+The initial version must not use:
 
 - `struct`.
 - Custom `enum` definitions.
@@ -578,3 +580,51 @@ Use `cargo check` frequently, run the program with `cargo run`, and format your 
 Do not begin by writing the entire program at once. Implement and test one subsystem at a time.
 
 **The challenge is not simply to make the simulation work. It is to design the program so that the rules remain consistent as the state changes, while using Rust's ownership and borrowing model correctly.**
+
+---
+
+## 17. Second Iteration: Structured Refactor
+
+The second iteration keeps the simulation rules from Sections 1–16 and refactors the implementation to introduce the next set of Rust concepts. This section records the intentional differences so that they do not conflict with the initial-version restrictions in Section 13.
+
+### Language features introduced
+
+The second iteration may use:
+
+- `struct` definitions and named fields.
+- Custom `enum` definitions and `match` on enum variants.
+- Implementation blocks (`impl`) for associated functions and methods.
+- `if let` and `let ... else` pattern matching.
+- `u32` for resource counters and elapsed-time arithmetic.
+- `min`/`max` and saturating arithmetic for resource limits.
+- Standard-library helpers such as `String`, `std::format!`, and `std::io::Write`.
+
+The project remains standard-library only.
+
+### Structural changes
+
+- `SystemState` (an integer alias with `SYSTEM_*` constants) becomes `SystemStatus`, an enum with `Online`, `Offline`, and `Damaged` variants.
+- The menu option alias is renamed from `Option` to `MenuOption` so it does not shadow the standard-library `Option<T>`.
+- The `Resources`, `SystemState`, and `FacilityStatus` tuples become the `Resources`, `SystemState`, and `Facility` structs.
+- Facility state helpers become methods on `Facility`; the status label helper becomes a method on `SystemStatus`.
+- UI helpers are grouped in an implementation block for `Ui`.
+- Main-menu helpers are grouped in an implementation block for `MainMenu`.
+- Mission flow, actions, failure checks, and scoring are grouped in an implementation block for `Mission`.
+- Resource quantities and remaining time use `u32`; remaining occupants use `u8`.
+
+### Behavioural clarifications
+
+The rule set in Sections 4–12 is unchanged. In particular, the second iteration must still:
+
+- Check affordability before running the fault mechanic.
+- Leave all state unchanged when an action is rejected.
+- Make Emergency Shutdown put Security into the `Offline` state, not `Damaged`.
+- Make Life Support restoration cost 5 minutes and leave Life Support `Online`.
+- Evaluate success before failure after the final action.
+- Award the fault-free scoring bonus only when no fault occurred.
+
+### Tests
+
+The automated tests live in `tests/spec.rs`. They include the source directly so deterministic private helpers can be exercised without modifying the implementation. Terminal-only behaviour remains manually testable with `cargo run`.
+
+Known deviations from this specification at the time of writing are recorded in `docs/BUGS.md`.
