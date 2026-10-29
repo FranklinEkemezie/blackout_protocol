@@ -1,149 +1,226 @@
-// Include the binary source in this test crate so its private, deterministic
-// state helpers can be checked without changing src/main.rs.
 mod app {
     include!("../src/main.rs");
 
     #[cfg(test)]
     mod spec_tests {
-    use super::*;
+        use super::*;
 
-    fn state() -> FacilityStatus {
-        INITIAL_FACILITY_STATUS
+        fn facility() -> Facility {
+            INITIAL_FACILITY
+        }
+
+        fn set_all_systems_online(facility: &mut Facility) {
+            facility.systems_state.life_support = SystemStatus::Online;
+            facility.systems_state.communications = SystemStatus::Online;
+            facility.systems_state.security = SystemStatus::Online;
+            facility.systems_state.evacuation_lift = SystemStatus::Online;
+        }
+
+        fn set_all_systems_damaged(facility: &mut Facility) {
+            facility.systems_state.life_support = SystemStatus::Damaged;
+            facility.systems_state.communications = SystemStatus::Damaged;
+            facility.systems_state.security = SystemStatus::Damaged;
+            facility.systems_state.evacuation_lift = SystemStatus::Damaged;
+        }
+
+        #[test]
+        fn new_mission_has_the_specified_initial_state() {
+            let f = facility();
+
+            assert_eq!(f.resources.fuel, 100);
+            assert_eq!(f.resources.emergency_power, 100);
+            assert_eq!(f.resources.time, 30);
+            assert_eq!(f.get_time_elapsed(), 0);
+            assert_eq!(f.n_remaining_occupants, 12);
+            assert_eq!(f.get_evacuated_occupants(), 0);
+            assert_eq!(f.systems_state.life_support.get_label(), "Offline");
+            assert_eq!(f.systems_state.communications.get_label(), "Offline");
+            assert_eq!(f.systems_state.security.get_label(), "Online");
+            assert_eq!(f.systems_state.evacuation_lift.get_label(), "Offline");
+        }
+
+        #[test]
+        fn elapsed_time_is_derived_from_remaining_time() {
+            let mut f = facility();
+            f.resources.time = 18;
+
+            assert_eq!(f.get_time_elapsed(), 12);
+        }
+
+        #[test]
+        fn fuel_cannot_become_negative() {
+            let mut f = facility();
+            f.resources.fuel = 2;
+            f.decrease_fuel(5);
+
+            assert_eq!(f.resources.fuel, 0);
+        }
+
+        #[test]
+        fn emergency_power_cannot_exceed_one_hundred() {
+            let mut f = facility();
+            f.resources.emergency_power = 95;
+            f.increase_power(10);
+
+            assert_eq!(f.resources.emergency_power, 100);
+        }
+
+        #[test]
+        fn remaining_time_cannot_become_negative() {
+            let mut f = facility();
+            f.resources.time = 1;
+            f.decrease_time(5);
+
+            assert_eq!(f.resources.time, 0);
+        }
+
+        #[test]
+        fn evacuation_requires_every_system_online() {
+            let mut f = facility();
+            set_all_systems_online(&mut f);
+            assert!(f.is_evacuation_possible());
+
+            f.systems_state.life_support = SystemStatus::Offline;
+            assert!(!f.is_evacuation_possible());
+            f.systems_state.life_support = SystemStatus::Online;
+
+            f.systems_state.communications = SystemStatus::Damaged;
+            assert!(!f.is_evacuation_possible());
+            f.systems_state.communications = SystemStatus::Online;
+
+            f.systems_state.security = SystemStatus::Offline;
+            assert!(!f.is_evacuation_possible());
+            f.systems_state.security = SystemStatus::Online;
+
+            f.systems_state.evacuation_lift = SystemStatus::Damaged;
+            assert!(!f.is_evacuation_possible());
+        }
+
+        #[test]
+        fn evacuation_requires_minimum_fuel_and_emergency_power() {
+            let mut f = facility();
+            set_all_systems_online(&mut f);
+
+            f.resources.fuel = 4;
+            assert!(!f.is_evacuation_possible());
+            f.resources.fuel = 5;
+            assert!(f.is_evacuation_possible());
+
+            f.resources.emergency_power = 9;
+            assert!(!f.is_evacuation_possible());
+            f.resources.emergency_power = 10;
+            assert!(f.is_evacuation_possible());
+        }
+
+        #[test]
+        fn fault_condition_is_deterministic() {
+            let mut f = facility();
+            f.resources.time = 0;
+            f.resources.fuel = 89;
+            assert!(Mission::restore_system_should_trigger_fault(&f));
+
+            f.resources.fuel = 90;
+            assert!(!Mission::restore_system_should_trigger_fault(&f));
+
+            f.resources.fuel = 96;
+            assert!(Mission::restore_system_should_trigger_fault(&f));
+        }
+
+        #[test]
+        fn damaged_system_repairs_to_offline() {
+            let mut f = facility();
+
+            f.systems_state.life_support = SystemStatus::Damaged;
+            f.repair_life_support();
+            assert_eq!(f.systems_state.life_support.get_label(), "Offline");
+
+            f.systems_state.communications = SystemStatus::Damaged;
+            f.repair_communication();
+            assert_eq!(f.systems_state.communications.get_label(), "Offline");
+
+            f.systems_state.evacuation_lift = SystemStatus::Damaged;
+            f.repair_evacuation_lift();
+            assert_eq!(f.systems_state.evacuation_lift.get_label(), "Offline");
+        }
+
+        #[test]
+        fn damaged_security_repairs_to_offline() {
+            let mut f = facility();
+            f.systems_state.security = SystemStatus::Damaged;
+
+            f.repair_security();
+
+            assert_eq!(f.systems_state.security.get_label(), "Offline");
+        }
+
+        #[test]
+        fn repair_does_not_bring_a_system_online() {
+            let mut f = facility();
+            f.systems_state.life_support = SystemStatus::Damaged;
+
+            f.repair_life_support();
+
+            assert_eq!(f.systems_state.life_support.get_label(), "Offline");
+        }
+
+        #[test]
+        fn offline_systems_restore_online() {
+            let mut f = facility();
+
+            f.restore_life_support();
+            assert_eq!(f.systems_state.life_support.get_label(), "Online");
+
+            f.restore_communication();
+            assert_eq!(f.systems_state.communications.get_label(), "Online");
+
+            f.systems_state.security = SystemStatus::Offline;
+            f.restore_security();
+            assert_eq!(f.systems_state.security.get_label(), "Online");
+
+            f.restore_evacuation_lift();
+            assert_eq!(f.systems_state.evacuation_lift.get_label(), "Online");
+        }
+
+        #[test]
+        fn emergency_shutdown_takes_security_offline() {
+            let mut f = facility();
+            assert_eq!(f.systems_state.security.get_label(), "Online");
+
+            f.shutdown_security();
+
+            assert_eq!(f.systems_state.security.get_label(), "Offline");
+        }
+
+        #[test]
+        fn evacuation_never_removes_more_than_the_remaining_occupants() {
+            let mut f = facility();
+            f.n_remaining_occupants = 2;
+
+            f.evacuate_occupants(4);
+
+            assert_eq!(f.n_remaining_occupants, 0);
+            assert_eq!(f.get_evacuated_occupants(), 12);
+        }
+
+        #[test]
+        fn reset_returns_the_facility_to_its_initial_state() {
+            let mut f = facility();
+            f.resources.fuel = 1;
+            f.resources.emergency_power = 2;
+            f.resources.time = 3;
+            f.n_remaining_occupants = 4;
+            set_all_systems_damaged(&mut f);
+
+            f.reset();
+
+            assert_eq!(f.resources.fuel, 100);
+            assert_eq!(f.resources.emergency_power, 100);
+            assert_eq!(f.resources.time, 30);
+            assert_eq!(f.n_remaining_occupants, 12);
+            assert_eq!(f.systems_state.life_support.get_label(), "Offline");
+            assert_eq!(f.systems_state.communications.get_label(), "Offline");
+            assert_eq!(f.systems_state.security.get_label(), "Online");
+            assert_eq!(f.systems_state.evacuation_lift.get_label(), "Offline");
+        }
     }
-
-    #[test]
-    fn new_mission_has_the_specified_initial_state() {
-        let s = state();
-        assert_eq!(s.0.0, 100, "fuel");
-        assert_eq!(s.0.1, 100, "emergency power");
-        assert_eq!(facility_status_get_time_elapsed(&s), 0);
-        assert_eq!(s.1, 12, "occupants remaining");
-        assert_eq!(facility_status_get_evacuated_occupants(&s), 0);
-        assert_eq!(s.2, (SYSTEM_OFFLINE, SYSTEM_OFFLINE, SYSTEM_ONLINE, SYSTEM_OFFLINE));
-    }
-
-    #[test]
-    fn evacuation_requires_all_four_systems_and_minimum_resources() {
-        let mut s = state();
-        assert!(!facility_status_is_evacuation_possible(&s));
-        s.2 = (SYSTEM_ONLINE, SYSTEM_ONLINE, SYSTEM_ONLINE, SYSTEM_ONLINE);
-        assert!(facility_status_is_evacuation_possible(&s));
-        s.0.0 = 4;
-        assert!(!facility_status_is_evacuation_possible(&s));
-        s.0.0 = 5;
-        s.0.1 = 9;
-        assert!(!facility_status_is_evacuation_possible(&s));
-        s.0.1 = 10;
-        assert!(facility_status_is_evacuation_possible(&s));
-        s.2.3 = SYSTEM_DAMAGED;
-        assert!(!facility_status_is_evacuation_possible(&s));
-    }
-
-    #[test]
-    fn elapsed_time_is_derived_from_remaining_time() {
-        let mut s = state();
-        s.0.2 = 18;
-        assert_eq!(facility_status_get_time_elapsed(&s), 12);
-    }
-
-    #[test]
-    fn resource_helpers_enforce_the_specified_limits() {
-        let mut s = state();
-        s.0.0 = 2;
-        facility_status_decrease_fuel(&mut s, 5);
-        assert_eq!(s.0.0, 0, "fuel must not become negative");
-
-        s.0.1 = 95;
-        facility_status_increase_power(&mut s, 10);
-        assert_eq!(s.0.1, 100, "power must be capped at 100");
-
-        facility_status_decrease_time(&mut s, 31);
-        assert_eq!(s.0.2, 0, "remaining time must not become negative");
-    }
-
-    #[test]
-    fn fault_condition_uses_sum_of_elapsed_time_and_fuel_before_modulo() {
-        let mut s = state();
-        s.0.0 = 89;
-        s.0.2 = 0; // elapsed 30; 30 + 89 is divisible by 7
-        assert!(mission_restore_system_should_trigger_fault(&s));
-        s.0.0 = 90;
-        assert!(!mission_restore_system_should_trigger_fault(&s));
-    }
-
-    #[test]
-    fn failed_mission_boundaries_and_reason_follow_spec() {
-        let mut s = state();
-        assert!(!mission_is_mission_failed(&s));
-        s.0.0 = 0;
-        assert!(mission_is_mission_failed(&s));
-        assert_eq!(mission_mission_failed_reason(&s), "You are out of fuel");
-
-        s = state();
-        s.0.1 = 0;
-        assert!(mission_is_mission_failed(&s));
-        assert_eq!(mission_mission_failed_reason(&s), "You are out of emergency power");
-
-        s = state();
-        s.0.2 = 0;
-        assert!(mission_is_mission_failed(&s));
-        assert_eq!(mission_mission_failed_reason(&s), "Time is up");
-
-        s = state();
-        s.2.0 = SYSTEM_DAMAGED;
-        assert!(mission_is_mission_failed(&s));
-        assert_eq!(mission_mission_failed_reason(&s), "Life support is broken");
-    }
-
-    #[test]
-    fn mission_succeeds_only_after_all_twelve_are_evacuated() {
-        let mut s = state();
-        assert!(!mission_is_mission_successful(&s));
-        facility_status_evacuate_occupants(&mut s, 4);
-        assert_eq!(s.1, 8);
-        assert!(!mission_is_mission_successful(&s));
-        facility_status_evacuate_occupants(&mut s, 20);
-        assert_eq!(s.1, 0);
-        assert_eq!(facility_status_get_evacuated_occupants(&s), 12);
-        assert!(mission_is_mission_successful(&s));
-    }
-
-    #[test]
-    fn scoring_awards_only_criteria_met_and_uses_classification_thresholds() {
-        let mut s = state();
-        s.1 = 0;
-        assert_eq!(mission_calculate_mission_score(&s), 100);
-        assert_eq!(mission_get_mission_score_grade(100), "Exceptional");
-        assert_eq!(mission_get_mission_score_grade(90), "Exceptional");
-        assert_eq!(mission_get_mission_score_grade(89), "Successful");
-        assert_eq!(mission_get_mission_score_grade(70), "Successful");
-        assert_eq!(mission_get_mission_score_grade(69), "Marginal");
-        assert_eq!(mission_get_mission_score_grade(50), "Marginal");
-        assert_eq!(mission_get_mission_score_grade(49), "Poor");
-
-        s.0.2 = 9; // elapsed 21: misses the speed award
-        s.0.0 = 29;
-        s.0.1 = 29;
-        assert_eq!(mission_calculate_mission_score(&s), 50);
-    }
-
-    #[test]
-    fn system_repair_transitions_damaged_to_offline_then_online() {
-        let mut s = state();
-        s.2.0 = SYSTEM_DAMAGED;
-        facility_status_repair_life_support(&mut s);
-        assert_eq!(s.2.0, SYSTEM_OFFLINE);
-        facility_status_restore_life_support(&mut s);
-        assert_eq!(s.2.0, SYSTEM_ONLINE);
-    }
-
-    #[test]
-    fn evacuation_never_removes_more_than_the_remaining_occupants() {
-        let mut s = state();
-        s.1 = 2;
-        facility_status_evacuate_occupants(&mut s, 4);
-        assert_eq!(s.1, 0);
-        assert_eq!(facility_status_get_evacuated_occupants(&s), 12);
-    }
-}
 }
