@@ -1,4 +1,4 @@
-use std::{cmp::{max, min}, process::exit};
+use std::{cmp::{max, min}, io::{self, Write}, process::exit};
 
 
 // Main Menu
@@ -265,7 +265,11 @@ impl Ui {
     fn prompt_user(label: &str) -> String {
         loop {
 
-            println!("{label}: ");
+            print!("{label}: ");
+            if ! io::stdout().flush().is_ok() {
+                Ui::print_error_msg("Something went wrong");
+                continue;
+            }
 
             let mut buf = String::from("");
 
@@ -414,8 +418,8 @@ Occupants Remaining: {}
 Occupants Evacuated: {}
             ",
             self.get_time_elapsed(),
-            resources.emergency_power, 
-            resources.fuel,
+            resources.fuel, 
+            resources.emergency_power,
 
             &systems_state.life_support.get_label(),
             &systems_state.communications.get_label(),
@@ -440,7 +444,7 @@ Occupants Evacuated: {}
     }
 
     fn increase_power(&mut self, power_units: u32) {
-        self.resources.emergency_power = min(self.resources.emergency_power + power_units, INITIAL_FACILITY.resources.fuel);
+        self.resources.emergency_power = min(self.resources.emergency_power + power_units, INITIAL_FACILITY.resources.emergency_power);
     }
 
     fn decrease_time(&mut self, time_units: u32) {
@@ -482,7 +486,7 @@ Occupants Evacuated: {}
     Emergency Power:    {} units
     Fuel:               {} units
             ",
-            resources.time, resources.fuel, resources.emergency_power,
+            resources.time, resources.emergency_power, resources.fuel,
         );
 
         // Mission Progress
@@ -663,10 +667,10 @@ Occupants Evacuated: {}
 impl Mission {
     fn start_new(facility: &mut Facility) {
 
-        Ui::print_heading("Mission Initial Status");
-        INITIAL_FACILITY.print();
-
         facility.reset();
+
+        Ui::print_heading("Mission Initial Status");
+        facility.print();
 
         loop {
             let option = Mission::get_option(facility.resources.time);
