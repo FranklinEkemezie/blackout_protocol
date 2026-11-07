@@ -1,8 +1,6 @@
-use std::{cmp::{max, min}, io::{self, Write}, process::exit};
-
+use std::io::{self, Write};
 
 // Main Menu
-
 const MAIN_MENU: &str = "
 1. Start New Mission
 2. View Mission Briefing
@@ -193,10 +191,20 @@ enum SystemStatus {
 
 type MenuOption = u8;
 
+enum ResourceType {
+    Fuel,
+    EmergencyPower,
+    Time
+}
+struct Resource {
+    unit: u32,
+    r#type: ResourceType
+}
+
 struct Resources {
-    fuel: u32,
-    emergency_power: u32,
-    time: u32
+    fuel: Resource,
+    emergency_power: Resource,
+    time: Resource
 }
 
 struct SystemState {
@@ -208,28 +216,20 @@ struct SystemState {
 
 struct Facility {
     resources: Resources,
-    n_remaining_occupants: u8,
+    n_remaining_occupants: u32,
     systems_state: SystemState
 }
 
-const INITIAL_RESOURCES: Resources = Resources {
-    fuel: 100, 
-    emergency_power: 100, 
-    time: 30
-};
-
-const INITIAL_N_REMAINING_OCCUPANTS: u8 = 12;
-const INITIAL_SYSTEM_STATE: SystemState = SystemState {
-    life_support: SystemStatus::Offline,
-    communications: SystemStatus::Offline,
-    security: SystemStatus::Online,
-    evacuation_lift: SystemStatus::Offline,
-};
 
 const INITIAL_FACILITY: Facility = Facility {
-    resources: INITIAL_RESOURCES, 
-    n_remaining_occupants: INITIAL_N_REMAINING_OCCUPANTS,
-    systems_state: INITIAL_SYSTEM_STATE
+    resources: Resources::new(100, 100, 100), 
+    n_remaining_occupants: 12,
+    systems_state: SystemState {
+        life_support: SystemStatus::Offline,
+        communications: SystemStatus::Offline,
+        security: SystemStatus::Online,
+        evacuation_lift: SystemStatus::Offline
+    }
 };
 
 struct Ui ();
@@ -369,7 +369,7 @@ impl MainMenu {
 
     fn exit_application() {
         Ui::print_info_msg("Exiting application. Bye...");
-        exit(0);
+        std::process::exit(0);
     }
 
     fn view_mission_briefing() {
@@ -381,6 +381,98 @@ impl MainMenu {
         Ui::print_heading("How to Play");
         println!("{INSTRUCTIONS}");
     }
+}
+
+impl Resource {
+    
+    const fn new(unit: u32, r#type: ResourceType) -> Self { 
+        Self { unit, r#type } 
+    }
+
+    const fn fuel(unit: u32) -> Self { 
+        Self::new(unit, ResourceType::Fuel) 
+    }
+
+    const fn emergency_power(unit: u32) -> Self { 
+        Self::new(unit, ResourceType::EmergencyPower) 
+    }
+
+    const fn time(unit: u32) -> Self {
+        Self::new(unit, ResourceType::Time)
+    }
+
+    fn get_unit(&self) -> u32 { self.unit }
+    fn set_unit(&mut self, unit: u32) { self.unit = unit }
+
+    fn get_type(&self) -> ResourceType {
+        match self.r#type {
+            ResourceType::Fuel              => ResourceType::Fuel,
+            ResourceType::EmergencyPower    => ResourceType::EmergencyPower,
+            ResourceType::Time              => ResourceType::Time
+        }
+    }
+
+    fn increase_by(&mut self, unit: u32) { 
+        self.set_unit(std::cmp::min(
+            self.get_unit().saturating_add(unit), 
+            INITIAL_FACILITY.get_resource_unit(self.get_type())
+        ));
+    }
+
+    fn decrease_by(&mut self, unit: u32) {
+        self.set_unit(std::cmp::max(self.get_unit().saturating_sub(unit), 0));
+    }
+
+    fn available(&self) -> bool { self.get_unit() > 0 }
+    fn unavailable(&self) -> bool { ! self.available() }
+
+}
+
+impl Resources {
+    
+    const fn new(fuel: u32, emergency_power: u32, time: u32) -> Self {
+        Self { 
+            fuel: Resource::fuel(fuel), 
+            emergency_power: Resource::emergency_power(emergency_power), 
+            time: Resource::time(time)
+        }
+    }
+
+    fn fuel(&mut self) -> &mut Resource { &mut self.fuel }
+    fn emergency_power(&mut self) -> &mut Resource { &mut self.emergency_power }
+    fn time(&mut self) -> &mut Resource { &mut self.time }
+
+    fn get_fuel(&self) -> &Resource { &self.fuel }
+    fn get_emergency_power(&self) -> &Resource { &self.emergency_power }
+    fn get_time(&self) -> &Resource { &self.time }
+
+    fn get_resource(&self, resource_type: ResourceType) -> &Resource {
+        match resource_type {
+            ResourceType::Fuel              => self.get_fuel(),
+            ResourceType::EmergencyPower    => self.get_emergency_power(),
+            ResourceType::Time              => self.get_time()
+        }
+    }
+
+    fn increase_by(&mut self, fuel: u32, emergency_power: u32, time: u32) {
+        self.fuel().increase_by(fuel);
+        self.emergency_power().increase_by(emergency_power);
+        self.time().increase_by(time);
+    }
+
+    fn decrease_by(&mut self, fuel: u32, emergency_power: u32, time: u32) {
+        self.fuel().decrease_by(fuel);
+        self.emergency_power().decrease_by(emergency_power);
+        self.time().decrease_by(time);
+    }
+
+    fn any_unavailable(&self) -> bool {
+        self.get_fuel().unavailable() || 
+        self.get_emergency_power().unavailable() || 
+        self.get_time().unavailable()
+    }
+
+
 }
 
 impl SystemStatus {
@@ -395,13 +487,21 @@ impl SystemStatus {
 }
 
 impl Facility {
-    fn get_evacuated_occupants(&self) -> u8 {
-        INITIAL_N_REMAINING_OCCUPANTS - self.n_remaining_occupants
+
+    fn resources(&mut self) -> &mut Resources { &mut self.resources }
+
+    fn get_resources(&self) -> &Resources { &self.resources }
+    fn get_n_remaining_occupants(&self) -> u32 { self.n_remaining_occupants }
+
+    fn get_resource_unit(&self, resource_type: ResourceType) -> u32 {
+        self.get_resources().get_resource(resource_type).get_unit()
+    }
+
+    fn get_n_evacuated_occupants(&self) -> u32 {
+        INITIAL_FACILITY.get_n_remaining_occupants() - self.n_remaining_occupants
     }
 
     fn print(&self) {
-
-        let Facility { resources, n_remaining_occupants, systems_state } = self;
 
         println!(
             "
@@ -418,15 +518,16 @@ Occupants Remaining: {}
 Occupants Evacuated: {}
             ",
             self.get_time_elapsed(),
-            resources.fuel, 
-            resources.emergency_power,
+            self.get_resource_unit(ResourceType::Fuel),
+            self.get_resource_unit(ResourceType::EmergencyPower),
 
-            &systems_state.life_support.get_label(),
-            &systems_state.communications.get_label(),
-            &systems_state.security.get_label(),
-            &systems_state.evacuation_lift.get_label(),
+            self.systems_state.life_support.get_label(),
+            self.systems_state.communications.get_label(),
+            self.systems_state.security.get_label(),
+            self.systems_state.evacuation_lift.get_label(),
 
-            n_remaining_occupants, self.get_evacuated_occupants()
+            self.get_n_remaining_occupants(), 
+            self.get_n_evacuated_occupants()
         );
     }
 
@@ -435,29 +536,8 @@ Occupants Evacuated: {}
         *self = INITIAL_FACILITY;
     }
 
-    fn decrease_fuel(&mut self, fuel_units: u32) {
-        self.resources.fuel = max(self.resources.fuel.saturating_sub(fuel_units), 0);
-    }
-
-    fn decrease_power(&mut self, power_units: u32) {
-        self.resources.emergency_power = max(self.resources.emergency_power.saturating_sub(power_units), 0);
-    }
-
-    fn increase_power(&mut self, power_units: u32) {
-        self.resources.emergency_power = min(self.resources.emergency_power + power_units, INITIAL_FACILITY.resources.emergency_power);
-    }
-
-    fn decrease_time(&mut self, time_units: u32) {
-        self.resources.time = max(self.resources.time.saturating_sub(time_units), 0);
-    }
 
     fn print_inspection_report(&self) {
-
-        let Facility { 
-            resources, 
-            n_remaining_occupants, 
-            systems_state 
-        } = self;
 
         Ui::print_heading("Facility Inspection Report");
 
@@ -471,11 +551,11 @@ Occupants Evacuated: {}
     Security:           {}
     Evacuation Lift:    {}
         ",
-        &systems_state.life_support.get_label(),
-        &systems_state.communications.get_label(),
-        &systems_state.security.get_label(),
-        &systems_state.evacuation_lift.get_label(),
-        );
+        self.systems_state.life_support.get_label(),
+        self.systems_state.communications.get_label(),
+        self.systems_state.security.get_label(),
+        self.systems_state.evacuation_lift.get_label(),
+    );
 
         // Resources
 
@@ -486,7 +566,9 @@ Occupants Evacuated: {}
     Emergency Power:    {} units
     Fuel:               {} units
             ",
-            resources.time, resources.emergency_power, resources.fuel,
+            self.get_resource_unit(ResourceType::Time),
+            self.get_resource_unit(ResourceType::EmergencyPower),
+            self.get_resource_unit(ResourceType::Fuel),
         );
 
         // Mission Progress
@@ -498,8 +580,8 @@ Occupants Evacuated: {}
     Occupants Evacuated: {}
     Elapsed Time:        {} minutes
             ",
-            n_remaining_occupants, 
-            self.get_evacuated_occupants(),
+            self.get_n_remaining_occupants(), 
+            self.get_n_evacuated_occupants(),
             self.get_time_elapsed()
         );
 
@@ -512,9 +594,13 @@ Occupants Evacuated: {}
             ",
             self.is_evacuation_possible(),
             self.is_communication_online(),
-            self.resources.time, 
+            self.get_resource_unit(ResourceType::Time), 
         );
 
+    }
+
+    fn get_time_elapsed(&self) -> u32 {
+        INITIAL_FACILITY.get_resource_unit(ResourceType::Time) - self.get_resource_unit(ResourceType::Time)
     }
 
     fn is_life_support_online(&self) -> bool {
@@ -563,19 +649,6 @@ Occupants Evacuated: {}
 
     fn is_evacuation_lift_damaged(&self) -> bool {
         if let SystemStatus::Damaged = self.systems_state.evacuation_lift { return true; } else { return false; }
-    }
-
-    fn get_time_elapsed(&self) -> u32 {
-        INITIAL_FACILITY.resources.time - self.resources.time
-    }
-
-    fn is_evacuation_possible(&self) -> bool {
-        self.is_communication_online() &&
-        self.is_evacuation_lift_online() &&
-        self.is_life_support_online() &&
-        self.is_security_online() &&
-        self.resources.fuel >= 5 &&
-        self.resources.emergency_power >= 10
     }
 
     fn restore_life_support(&mut self) {
@@ -658,8 +731,18 @@ Occupants Evacuated: {}
         self.systems_state.evacuation_lift = SystemStatus::Damaged;
     }
 
-    fn evacuate_occupants(&mut self, occupants: u8) {
-        self.n_remaining_occupants = max(self.n_remaining_occupants.saturating_sub(occupants), 0);
+    fn is_evacuation_possible(&self) -> bool {
+        self.is_life_support_online() &&
+        self.is_communication_online() &&
+        self.is_security_online() &&
+        self.is_evacuation_lift_online() &&
+        self.get_resource_unit(ResourceType::Fuel) >= 5 &&
+        self.get_resource_unit(ResourceType::EmergencyPower) >= 10
+    }
+
+    fn evacuate_occupants(&mut self, occupants: u32) {
+        self.n_remaining_occupants = std::cmp::max(
+            self.get_n_remaining_occupants().saturating_sub(occupants), 0);
     }
 }
 
@@ -673,7 +756,7 @@ impl Mission {
         facility.print();
 
         loop {
-            let option = Mission::get_option(facility.resources.time);
+            let option = Mission::get_option(facility.get_resource_unit(ResourceType::Time));
 
             Mission::handle_option(option, facility);
 
@@ -731,7 +814,7 @@ impl Mission {
         let confirm = Ui::confirm_action(&std::format!("This action cost {TIME_COST} minutes"));
 
         if confirm {
-            facility.decrease_time(TIME_COST);
+            facility.resources().decrease_by(0, 0, TIME_COST);
             facility.print_inspection_report();
         }
     }
@@ -756,7 +839,7 @@ impl Mission {
     }
 
     fn restore_system_should_trigger_fault(facility: &Facility) -> bool {
-        ((facility.get_time_elapsed() + facility.resources.fuel) % 7) == 0
+        ((facility.get_time_elapsed() + facility.get_resource_unit(ResourceType::Fuel)) % 7) == 0
     }
 
     fn restore_system(facility: &mut Facility) {
@@ -826,37 +909,25 @@ impl Mission {
 
             match option_char {
                 'L' => {
-                    facility.decrease_fuel(8);
-                    facility.decrease_power(12);
-                    facility.decrease_time(3);
-
+                    facility.resources().decrease_by(8, 12, 3);
                     facility.restore_life_support();
 
                     Ui::print_info_msg("The life support system is now restored and fully online!");
                 },
                 'C' => {
-                    facility.decrease_fuel(5);
-                    facility.decrease_power(8);
-                    facility.decrease_time(3);
-
+                    facility.resources().decrease_by(5, 8, 3);
                     facility.restore_communication();
 
                     Ui::print_info_msg("The communication system is now restored and fully online!");
                 },
                 'S' => {
-                    facility.decrease_fuel(6);
-                    facility.decrease_power(10);
-                    facility.decrease_time(4);
-
+                    facility.resources().decrease_by(6, 10, 4);
                     facility.restore_security();
 
                     Ui::print_info_msg("The security system is now restored and fully online!");
                 },
                 'E' => {
-                    facility.decrease_fuel(10);
-                    facility.decrease_power(15);
-                    facility.decrease_time(6);
-
+                    facility.resources().decrease_by(10, 15, 6);
                     facility.restore_evacuation_lift();
 
                     Ui::print_info_msg("The evacuation lift system is now restored and fully online!");
@@ -866,7 +937,7 @@ impl Mission {
                         "Invalid input [{option_char}]. Please try again!"));
                     continue;
                 }
-            }
+            };
 
             return;
         }
@@ -927,9 +998,7 @@ impl Mission {
                 return;
             }
 
-            facility.decrease_fuel(4);
-            facility.decrease_power(5);
-            facility.decrease_time(3);
+            facility.resources().decrease_by(4, 5, 3);
 
             match option_char {
                 'L' => facility.repair_life_support(),
@@ -954,12 +1023,12 @@ impl Mission {
     fn manage_emergency_power(facility: &mut Facility) {
 
         const MANAGE_EMERGENCY_POWER_MENU: &str = "
-    1. Conserve Power - Reduce the facility's energy consumption.
-        Increases emergency power by 10 units for 5 fuel units. 
-        Takes 2 minutes.
-    2. Emergency Shutdown - Shut down nonessential systems to reduce power consumption.
-        Increases emergency power by 20 units for 10 fuel units.
-        Takes 4 minutes. Security system goes offline.
+1. Conserve Power - Reduce the facility's energy consumption.
+    Increases emergency power by 10 units for 5 fuel units. 
+    Takes 2 minutes.
+2. Emergency Shutdown - Shut down nonessential systems to reduce power consumption.
+    Increases emergency power by 20 units for 10 fuel units.
+    Takes 4 minutes. Security system goes offline.
         ";
 
         println!("{MANAGE_EMERGENCY_POWER_MENU}");
@@ -976,9 +1045,8 @@ impl Mission {
                     return;
                 }
 
-                facility.increase_power(10);
-                facility.decrease_fuel(5);
-                facility.decrease_time(2);
+                facility.resources().decrease_by(5, 0, 2);
+                facility.resources().increase_by(0, 10, 0);
             },
             2   => {
 
@@ -990,9 +1058,9 @@ impl Mission {
                     return;
                 }
 
-                facility.increase_power(20);
-                facility.decrease_fuel(10);
-                facility.decrease_time(4);
+                facility.resources().decrease_by(10, 0, 4);
+                facility.resources().increase_by(0, 20, 0);
+
                 facility.shutdown_security();
 
             },
@@ -1023,21 +1091,19 @@ impl Mission {
             return;
         }
 
-        if ! (facility.resources.fuel >= 5) {
+        if ! (facility.get_resource_unit(ResourceType::Fuel) >= 5) {
             Ui::print_error_msg("Failed to evacuate: Insufficient fuel");
             return;
         }
 
-        if ! (facility.resources.emergency_power >= 10) {
+        if ! (facility.get_resource_unit(ResourceType::EmergencyPower) >= 10) {
             Ui::print_error_msg("Failed to evacuate: Insufficient emergency power");
             return;
         }
 
-        facility.decrease_fuel(5);
-        facility.decrease_power(10);
-        facility.decrease_time(3);
+        facility.resources().decrease_by(5, 10, 3);
 
-        const MAX_OCCUPANTS_PER_EVACUATION: u8 = 4;
+        const MAX_OCCUPANTS_PER_EVACUATION: u32 = 4;
         
         facility.evacuate_occupants(MAX_OCCUPANTS_PER_EVACUATION);
 
@@ -1045,7 +1111,6 @@ impl Mission {
             "Evacuated {MAX_OCCUPANTS_PER_EVACUATION} persons successfully! Remaining {} occupants",
                 facility.n_remaining_occupants)
             );
-
 
     }
 
@@ -1061,24 +1126,18 @@ impl Mission {
     }
 
     fn is_mission_successful(facility: &Facility) -> bool {
-        facility.get_evacuated_occupants() == INITIAL_N_REMAINING_OCCUPANTS
+        facility.get_n_evacuated_occupants() == INITIAL_FACILITY.get_n_remaining_occupants()
     }
 
     fn is_mission_failed(facility: &Facility) -> bool {
 
-        let Facility { 
-            resources, 
-            n_remaining_occupants: _, 
-            systems_state 
-        } = facility;
-
-        if  resources.fuel == 0 ||     // fuel reaches zero
-            resources.emergency_power == 0 ||     // emergency power reaches zero
-            resources.time == 0        // time remaining reaches zero
+        if  facility.get_resource_unit(ResourceType::Fuel) == 0 ||
+            facility.get_resource_unit(ResourceType::EmergencyPower) == 0 ||
+            facility.get_resource_unit(ResourceType::Time) == 0
         { return true; }
 
         // life support is damaged
-        let SystemStatus::Damaged = systems_state.life_support else { return true; };
+        let SystemStatus::Damaged = facility.systems_state.life_support else { return true; };
 
         // the player still has enough resources, mission is still on, 
         // so it is not failed
@@ -1088,15 +1147,16 @@ impl Mission {
 
     fn mission_failed_reason(facility: &Facility) -> String {
         
-        if facility.resources.fuel == 0 {
+
+        if facility.get_resource_unit(ResourceType::Fuel) == 0 {
             return String::from("You are out of fuel");
         }
 
-        if facility.resources.emergency_power == 0 {
+        if facility.get_resource_unit(ResourceType::EmergencyPower) == 0 {
             return String::from("You are out of emergency power");
         }
 
-        if facility.resources.time == 0 {
+        if facility.get_resource_unit(ResourceType::Time) == 0 {
             return String::from("Time is up");
         }
 
@@ -1117,7 +1177,7 @@ impl Mission {
 
         let mut mission_score = 0;
 
-        if facility.get_evacuated_occupants() == INITIAL_N_REMAINING_OCCUPANTS {
+        if facility.get_n_evacuated_occupants() == INITIAL_FACILITY.get_n_remaining_occupants() {
             mission_score += EVACUATE_ALL_OCCUPANTS_SCORE;
         }
 
@@ -1125,11 +1185,11 @@ impl Mission {
             mission_score += COMPLETE_IN_20_MINS_OR_LESS_SCORE;
         }
 
-        if facility.resources.fuel >= 30 {
+        if facility.get_resource_unit(ResourceType::Fuel) >= 30 {
             mission_score += FINISH_WITH_AT_LEAST_30_FUEL_UNITS_SCORE;
         }
 
-        if facility.resources.emergency_power >= 30 {
+        if facility.get_resource_unit(ResourceType::EmergencyPower) >= 30 {
             mission_score += FINISH_WITH_AT_LEAST_30_POWER_UNITS_SCORE;
         }
 
