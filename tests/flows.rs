@@ -326,3 +326,33 @@ fn invalid_mission_input_is_rejected() {
     );
     assert_contains(&output, "YOU ENDED THE MISSION");
 }
+
+#[test]
+fn evacuation_is_rejected_when_the_evacuation_lift_is_offline() {
+    let output = run("1\n2\nL\n2\nC\n5\n6\n4\n");
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert_contains(&output, "Failed to evacuate");
+    assert_contains(&output, "Evacuation lift");
+    assert!(
+        !stdout(&output).contains("Evacuated 4 persons successfully"),
+        "occupants must not evacuate while the lift is offline"
+    );
+}
+
+#[test]
+fn repair_menu_lists_a_damaged_evacuation_lift() {
+    let script = format!("1\n{}2\nE\n3\n6\n4\n", "1\ny\n".repeat(6));
+    let output = run(&script);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let text = stdout(&output);
+    let repair_section = text
+        .rsplit_once("Damaged Systems")
+        .map(|(_, section)| section)
+        .expect("repair menu was not shown");
+    assert!(
+        repair_section.contains("[E] Evacuation Lift"),
+        "damaged Evacuation Lift is missing from repair menu\n{repair_section}"
+    );
+}
