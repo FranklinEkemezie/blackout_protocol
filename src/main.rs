@@ -207,29 +207,41 @@ struct Resources {
     time: Resource
 }
 
-struct SystemState {
-    life_support: SystemStatus,
-    communications: SystemStatus,
-    security: SystemStatus,
-    evacuation_lift: SystemStatus
+enum SystemType {
+    LifeSupport,
+    Communications,
+    Security,
+    EvacuationLift
+}
+
+struct System {
+    status: SystemStatus,
+    r#_type: SystemType
+}
+
+struct Systems {
+    life_support: System,
+    communications: System,
+    security: System,
+    evacuation_lift: System
 }
 
 struct Facility {
     resources: Resources,
     n_remaining_occupants: u32,
-    systems_state: SystemState
+    systems: Systems
 }
 
 
 const INITIAL_FACILITY: Facility = Facility {
     resources: Resources::new(100, 100, 100), 
     n_remaining_occupants: 12,
-    systems_state: SystemState {
-        life_support: SystemStatus::Offline,
-        communications: SystemStatus::Offline,
-        security: SystemStatus::Online,
-        evacuation_lift: SystemStatus::Offline
-    }
+    systems: Systems::new(
+        SystemStatus::Offline,
+        SystemStatus::Offline,
+        SystemStatus::Online,
+        SystemStatus::Offline
+    )
 };
 
 struct Ui ();
@@ -484,14 +496,152 @@ impl SystemStatus {
             SystemStatus::Damaged  => String::from("Damaged"),
         }
     }
+
+    fn label(&self) -> String { self.get_label() }
+
+    fn is_online(&self) -> bool {
+        if let Self::Online = self { return true; } else { return false; }
+    }
+
+    fn is_offline(&self) -> bool {
+        if let Self::Offline = self { return true; } else { return false; }
+    }
+
+    fn is_damaged(&self) -> bool {
+        if let Self::Damaged = self { return true; } else { return false; }
+    }
+
+}
+
+impl System {
+
+    const fn new(status: SystemStatus, r#type: SystemType) -> Self { 
+        Self { status, _type: r#type } 
+    }
+
+    const fn life_support(status: SystemStatus) -> Self { 
+        Self::new(status, SystemType::LifeSupport) 
+    }
+
+    const fn communications(status: SystemStatus) -> Self {
+        Self::new(status, SystemType::Communications)
+    }
+
+    const fn security(status: SystemStatus) -> Self {
+        Self::new(status, SystemType::Security)
+    }
+
+    const fn evacuation_lift(status: SystemStatus) -> Self {
+        Self::new(status, SystemType::EvacuationLift)
+    }
+
+    fn is_online(&self) -> bool { self.status.is_online() }
+    fn is_offline(&self) -> bool { self.status.is_offline() }
+    fn is_damaged(&self) -> bool { self.status.is_damaged() }
+
+    fn set_status(&mut self, status: SystemStatus) { self.status = status; }
+    fn get_status(&self) -> &SystemStatus { &self.status }
+    fn get_status_label(&self) -> String { self.get_status().label() }
+
+    fn _get_type(&self) -> SystemType {
+        match self.r#_type {
+            SystemType::LifeSupport     => SystemType::LifeSupport,
+            SystemType::Communications  => SystemType::Communications,
+            SystemType::Security        => SystemType::Security,
+            SystemType::EvacuationLift  => SystemType::EvacuationLift
+        }
+    }
+
+    fn restore(&mut self) {
+        if ! self.is_offline() {
+            panic!("The system must be offline to be restored");
+        };
+
+        self.set_status(SystemStatus::Online);
+    }
+
+    fn repair(&mut self) {
+        if ! self.is_damaged() {
+            panic!("The system must be damaged to be repaired");
+        };
+
+        self.set_status(SystemStatus::Offline);
+    }
+
+    fn shutdown(&mut self) {
+        self.set_status(SystemStatus::Damaged);
+    }
+
+    fn turnoff(&mut self) {
+        if self.is_online() { 
+            self.set_status(SystemStatus::Offline); 
+        }
+    }
+
+
+}
+
+impl Systems {
+
+    const fn new(
+        life_support: SystemStatus,
+        communications: SystemStatus,
+        security: SystemStatus,
+        evacuation_lift: SystemStatus
+    ) -> Self {
+        Self { 
+            life_support: System::life_support(life_support), 
+            communications: System::communications(communications), 
+            security: System::security(security), 
+            evacuation_lift: System::evacuation_lift(evacuation_lift)
+        }
+    }
+    
+    fn life_support(&mut self) -> &mut System { &mut self.life_support }
+    fn communications(&mut self) -> &mut System { &mut self.communications }
+    fn security(&mut self) -> &mut System { &mut self.security }
+    fn evacuation_lift(&mut self) -> &mut System { &mut self.evacuation_lift }
+
+    fn get_life_support(&self) -> &System { &self.life_support }
+    fn get_communications(&self) -> &System { &self.communications }
+    fn get_security(&self) -> &System { &self.security }
+    fn get_evacuation_lift(&self) -> &System { &self.evacuation_lift }
+
+    fn system(&mut self, system_type: SystemType) -> &mut System {
+        match system_type {
+            SystemType::LifeSupport     => self.life_support(),
+            SystemType::Communications  => self.communications(),
+            SystemType::Security        => self.security(),
+            SystemType::EvacuationLift  => self.evacuation_lift()
+        }
+    }
+
+    fn get_system(&self, system_type: SystemType) -> &System {
+        match system_type {
+            SystemType::LifeSupport     => self.get_life_support(),
+            SystemType::Communications  => self.get_communications(),
+            SystemType::Security        => self.get_security(),
+            SystemType::EvacuationLift  => self.get_evacuation_lift()
+        }
+    }
 }
 
 impl Facility {
 
     fn resources(&mut self) -> &mut Resources { &mut self.resources }
+    fn systems(&mut self) -> &mut Systems { &mut self.systems }
 
     fn get_resources(&self) -> &Resources { &self.resources }
     fn get_n_remaining_occupants(&self) -> u32 { self.n_remaining_occupants }
+    fn get_systems(&self) -> &Systems { &self.systems }
+
+    fn system(&mut self, system_type: SystemType) -> &mut System { 
+        self.systems().system(system_type) 
+    }
+
+    fn get_system(&self, system_type: SystemType) -> &System { 
+        self.get_systems().get_system(system_type) 
+    }
 
     fn get_resource_unit(&self, resource_type: ResourceType) -> u32 {
         self.get_resources().get_resource(resource_type).get_unit()
@@ -521,10 +671,10 @@ Occupants Evacuated: {}
             self.get_resource_unit(ResourceType::Fuel),
             self.get_resource_unit(ResourceType::EmergencyPower),
 
-            self.systems_state.life_support.get_label(),
-            self.systems_state.communications.get_label(),
-            self.systems_state.security.get_label(),
-            self.systems_state.evacuation_lift.get_label(),
+            self.get_system(SystemType::LifeSupport).get_status_label(),
+            self.get_system(SystemType::Communications).get_status_label(),
+            self.get_system(SystemType::Security).get_status_label(),
+            self.get_system(SystemType::EvacuationLift).get_status_label(),
 
             self.get_n_remaining_occupants(), 
             self.get_n_evacuated_occupants()
@@ -551,10 +701,10 @@ Occupants Evacuated: {}
     Security:           {}
     Evacuation Lift:    {}
         ",
-        self.systems_state.life_support.get_label(),
-        self.systems_state.communications.get_label(),
-        self.systems_state.security.get_label(),
-        self.systems_state.evacuation_lift.get_label(),
+        self.get_system(SystemType::LifeSupport).get_status_label(),
+        self.get_system(SystemType::Communications).get_status_label(),
+        self.get_system(SystemType::Security).get_status_label(),
+        self.get_system(SystemType::EvacuationLift).get_status_label(),
     );
 
         // Resources
@@ -593,7 +743,7 @@ Occupants Evacuated: {}
     Remaining Time:         {} minutes
             ",
             self.is_evacuation_possible(),
-            self.is_communication_online(),
+            self.get_system(SystemType::Communications).is_online(),
             self.get_resource_unit(ResourceType::Time), 
         );
 
@@ -603,139 +753,11 @@ Occupants Evacuated: {}
         INITIAL_FACILITY.get_resource_unit(ResourceType::Time) - self.get_resource_unit(ResourceType::Time)
     }
 
-    fn is_life_support_online(&self) -> bool {
-        if let SystemStatus::Online = self.systems_state.life_support { return true; } else { return false; }
-    }
-
-    fn is_life_support_offline(&self) -> bool {
-        if let SystemStatus::Offline = self.systems_state.life_support { return true; } else { return false; }
-    }
-
-    fn is_life_support_damaged(&self) -> bool {
-        if let SystemStatus::Damaged = self.systems_state.life_support { return true; } else { return false; }
-    }
-
-    fn is_communication_online(&self) -> bool {
-        if let SystemStatus::Online = self.systems_state.communications { return true; } else { return false; }
-    }
-
-    fn is_communication_offline(&self) -> bool {
-        if let SystemStatus::Offline = self.systems_state.communications { return true; } else { return false; }
-    }
-
-    fn is_communication_damaged(&self) -> bool {
-        if let SystemStatus::Damaged = self.systems_state.communications { return true; } else { return false; }
-    }
-
-    fn is_security_online(&self) -> bool {
-        if let SystemStatus::Online = self.systems_state.security { return true; } else { return false; }
-    }
-
-    fn is_security_offline(&self) -> bool {
-        if let SystemStatus::Offline = self.systems_state.security { return true; } else { return false; }
-    }
-
-    fn is_security_damaged(&self) -> bool {
-        if let SystemStatus::Damaged = self.systems_state.security { return true; } else { return false; }
-    }
-
-    fn is_evacuation_lift_online(&self) -> bool {
-        if let SystemStatus::Online = self.systems_state.evacuation_lift { return true; } else { return false; }
-    }
-
-    fn is_evacuation_lift_offline(&self) -> bool {
-        if let SystemStatus::Offline = self.systems_state.evacuation_lift { return true; } else { return false; }
-    }
-
-    fn is_evacuation_lift_damaged(&self) -> bool {
-        if let SystemStatus::Damaged = self.systems_state.evacuation_lift { return true; } else { return false; }
-    }
-
-    fn restore_life_support(&mut self) {
-        let SystemStatus::Offline = self.systems_state.life_support else {
-            panic!("The system must be offline to be restored");
-        };
-
-        self.systems_state.life_support = SystemStatus::Offline;
-    }
-
-    fn repair_life_support(&mut self) {
-        let SystemStatus::Damaged = self.systems_state.life_support else {
-            panic!("The system must be damaged to be repaired");
-        };
-
-        self.systems_state.life_support = SystemStatus::Offline;
-    }
-
-    fn shutdown_life_support(&mut self) {
-        self.systems_state.life_support = SystemStatus::Damaged;
-    }
-
-    fn restore_communication(&mut self) {
-        let SystemStatus::Offline = self.systems_state.communications else {
-            panic!("The system must be offlined to be restored");
-        };
-
-        self.systems_state.communications = SystemStatus::Online;
-    }
-
-    fn repair_communication(&mut self) {
-        let SystemStatus::Damaged = self.systems_state.communications else {
-            panic!("The system must be damaged to be repaired");
-        };
-
-        self.systems_state.communications = SystemStatus::Offline;
-    }
-
-    fn shutdown_communication(&mut self) {
-        self.systems_state.communications = SystemStatus::Damaged;
-    }
-
-    fn restore_security(&mut self) {
-        let SystemStatus::Offline = self.systems_state.security else {
-            panic!("The system must be offlined to be restored");
-        };
-
-        self.systems_state.security = SystemStatus::Online;
-    }
-
-    fn repair_security(&mut self) {
-        let SystemStatus::Damaged = self.systems_state.evacuation_lift else {
-            panic!("The system must be damaged to be repaired");
-        };
-
-        self.systems_state.evacuation_lift = SystemStatus::Offline;
-    }
-
-    fn shutdown_security(&mut self) {
-        self.systems_state.security = SystemStatus::Damaged;
-    }
-
-    fn restore_evacuation_lift(&mut self) {
-        let SystemStatus::Offline = self.systems_state.evacuation_lift else {
-            panic!("The system must be offlined to be restored");
-        };
-
-        self.systems_state.evacuation_lift = SystemStatus::Online;
-    }
-
-    fn repair_evacuation_lift(&mut self) {
-        let SystemStatus::Damaged = self.systems_state.evacuation_lift else {
-            panic!("The system must be damaged to be repaired");
-        };
-
-        self.systems_state.evacuation_lift = SystemStatus::Offline;
-    }
-
-    fn shutdown_evacuation_lift(&mut self) {
-        self.systems_state.evacuation_lift = SystemStatus::Damaged;
-    }
-
     fn is_evacuation_possible(&self) -> bool {
-        self.is_life_support_online() &&
-        self.is_communication_online() &&
-        self.is_security_online() &&
-        self.is_evacuation_lift_online() &&
+        self.get_system(SystemType::LifeSupport).is_online() &&
+        self.get_system(SystemType::Communications).is_online() &&
+        self.get_system(SystemType::Security).is_online() &&
+        self.get_system(SystemType::EvacuationLift).is_online() &&
         self.get_resource_unit(ResourceType::Fuel) >= 5 &&
         self.get_resource_unit(ResourceType::EmergencyPower) >= 10
     }
@@ -853,19 +875,19 @@ impl Mission {
 
         println!("{restore_system_menu_title}");
 
-        if facility.is_life_support_offline() {
+        if facility.system(SystemType::LifeSupport).is_offline() {
             println!("{life_support_option}");
         }
 
-        if facility.is_communication_offline() {
+        if facility.system(SystemType::Communications).is_offline() {
             println!("{communications_option}");
         }
 
-        if facility.is_security_offline() {
+        if facility.system(SystemType::Security).is_offline() {
             println!("{security_option}");
         }
 
-        if facility.is_evacuation_lift_offline() {
+        if facility.system(SystemType::EvacuationLift).is_offline() {
             println!("{evacuation_lift_option}");
         }
 
@@ -882,19 +904,19 @@ impl Mission {
             if Mission::restore_system_should_trigger_fault(facility) {
                 match option_char {
                     'L' => {
-                        facility.shutdown_life_support();
+                        facility.system(SystemType::LifeSupport).shutdown();
                         Ui::print_error_msg("The life support system damaged during restoration");
                     },
                     'C' => {
-                        facility.shutdown_communication();
+                        facility.system(SystemType::Communications).shutdown();
                         Ui::print_error_msg("The communication system damaged during restoration");
                     },
                     'S' => {
-                        facility.shutdown_security();
+                        facility.system(SystemType::Security).shutdown();
                         Ui::print_error_msg("The security system damaged during restoration");
                     },
                     'E' => {
-                        facility.shutdown_evacuation_lift();
+                        facility.system(SystemType::EvacuationLift).shutdown();
                         Ui::print_error_msg("The evacuation system damaged during restoration");
                     },
                     _   => {
@@ -909,26 +931,28 @@ impl Mission {
 
             match option_char {
                 'L' => {
-                    facility.resources().decrease_by(8, 12, 3);
-                    facility.restore_life_support();
+                    facility.resources().decrease_by(8, 8, 2);
+                    facility.system(SystemType::LifeSupport).restore();
 
                     Ui::print_info_msg("The life support system is now restored and fully online!");
+
+                    return;
                 },
                 'C' => {
                     facility.resources().decrease_by(5, 8, 3);
-                    facility.restore_communication();
+                    facility.system(SystemType::Communications).restore();
 
                     Ui::print_info_msg("The communication system is now restored and fully online!");
                 },
                 'S' => {
                     facility.resources().decrease_by(6, 10, 4);
-                    facility.restore_security();
+                    facility.system(SystemType::Security).restore();
 
                     Ui::print_info_msg("The security system is now restored and fully online!");
                 },
                 'E' => {
                     facility.resources().decrease_by(10, 15, 6);
-                    facility.restore_evacuation_lift();
+                    facility.system(SystemType::EvacuationLift).restore();
 
                     Ui::print_info_msg("The evacuation lift system is now restored and fully online!");
                 },
@@ -951,22 +975,22 @@ impl Mission {
 
         Ui::print_subheading("Damaged Systems");
 
-        if facility.is_life_support_damaged() {
+        if facility.system(SystemType::LifeSupport).is_damaged() {
             println!("[L] Life Support");
             repair_system_options += "L";
         }
 
-        if facility.is_communication_damaged() {
+        if facility.system(SystemType::Communications).is_damaged() {
             println!("[C] Communications");
             repair_system_options += "C";
         }
 
-        if facility.is_security_damaged() {
+        if facility.system(SystemType::Security).is_damaged() {
             println!("[S] Security");
             repair_system_options += "S";
         }
 
-        if facility.is_evacuation_lift_damaged() {
+        if facility.system(SystemType::Security).is_damaged() {
             println!("[E] Evacuation Lift");
             repair_system_options += "E";
         }
@@ -1001,10 +1025,10 @@ impl Mission {
             facility.resources().decrease_by(4, 5, 3);
 
             match option_char {
-                'L' => facility.repair_life_support(),
-                'C' => facility.repair_communication(),
-                'S' => facility.repair_security(),
-                'E' => facility.repair_evacuation_lift(),
+                'L' => facility.system(SystemType::LifeSupport).repair(),
+                'C' => facility.system(SystemType::Communications).repair(),
+                'S' => facility.system(SystemType::Security).repair(),
+                'E' => facility.system(SystemType::EvacuationLift).repair(),
                 _   => {
                     Ui::print_info_msg(&std::format!(
                         "Invalid input: {option_char}. Please try again!"));
@@ -1061,7 +1085,7 @@ impl Mission {
                 facility.resources().decrease_by(10, 0, 4);
                 facility.resources().increase_by(0, 20, 0);
 
-                facility.shutdown_security();
+                facility.system(SystemType::Security).shutdown();
 
             },
             _   => Ui::print_error_msg(&std::format!("Unknown option: {option}. Please try again!"))
@@ -1071,23 +1095,23 @@ impl Mission {
 
     fn evacuate_occupants(facility: &mut Facility) {
 
-        if ! facility.is_communication_online() {
+        if ! facility.system(SystemType::Communications).is_online() {
             Ui::print_error_msg("Failed to evacuate: Communications is not online");
             return;
         }
 
-        if ! facility.is_evacuation_lift_online() {
-            Ui::print_error_msg("Failed to evacuate: Evacuation lift is not online");
+        if ! facility.system(SystemType::Communications).is_online() {
+            Ui::print_error_msg("Failed to evacuate: Evacuation lift is not available");
             return;
         }
 
-        if ! facility.is_life_support_online() {
-            Ui::print_error_msg("Failed to evacuate: Life support is not online");
+        if ! facility.system(SystemType::LifeSupport).is_online() {
+            Ui::print_error_msg("Failed to evacuate: Life support is not available");
             return;
         }
 
-        if ! facility.is_security_online() {
-            Ui::print_error_msg("Failed to evacuate: Security is not online");
+        if ! facility.system(SystemType::Security).is_online() {
+            Ui::print_error_msg("Failed to evacuate: Security is not available");
             return;
         }
 
@@ -1137,7 +1161,7 @@ impl Mission {
         { return true; }
 
         // life support is damaged
-        let SystemStatus::Damaged = facility.systems_state.life_support else { return true; };
+        let SystemStatus::Damaged = facility.get_system(SystemType::LifeSupport).get_status() else { return true; };
 
         // the player still has enough resources, mission is still on, 
         // so it is not failed
@@ -1160,7 +1184,7 @@ impl Mission {
             return String::from("Time is up");
         }
 
-        let SystemStatus::Damaged = facility.systems_state.life_support else {
+        let SystemStatus::Damaged = facility.get_system(SystemType::LifeSupport).get_status() else {
             return String::from("Life support is broken");
         };
 
