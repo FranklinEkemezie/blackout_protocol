@@ -240,3 +240,89 @@ fn a_damaged_system_can_be_repaired_then_restored() {
         assert_contains(&output, needle);
     }
 }
+
+#[test]
+fn conserving_power_caps_power_and_charges_fuel_and_time() {
+    let output = run("1\n4\n1\ny\n6\n4\n");
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    for needle in [
+        "Emergency Power:    100 units",
+        "Fuel:               95 units",
+        "Elapsed Time:       2 minutes",
+    ] {
+        assert_contains(&output, needle);
+    }
+}
+
+#[test]
+fn emergency_shutdown_offlines_security() {
+    let output = run("1\n4\n2\ny\n6\n4\n");
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    for needle in [
+        "Security:           Offline",
+        "Fuel:               90 units",
+        "Emergency Power:    100 units",
+        "Elapsed Time:       4 minutes",
+    ] {
+        assert_contains(&output, needle);
+    }
+}
+
+#[test]
+fn evacuation_is_rejected_before_the_required_systems_are_online() {
+    let output = run("1\n5\n6\n4\n");
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert_contains(&output, "Failed to evacuate");
+    assert_contains(&output, "Communications");
+}
+
+#[test]
+fn a_mission_can_be_completed_by_restoring_systems_and_evacuating() {
+    let output = run("1\n2\nL\n2\nC\n2\nE\n5\n5\n5\n4\n");
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert_contains(&output, "Mission Successful!");
+    assert_contains(&output, "Evacuated 4 persons successfully");
+}
+
+#[test]
+fn successful_mission_score_matches_the_specified_costs() {
+    let output = run("1\n2\nL\n2\nC\n2\nE\n5\n5\n5\n4\n");
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert_contains(&output, "You scored 80%. Successful");
+}
+
+#[test]
+fn mission_fails_when_the_thirty_minute_limit_is_reached() {
+    let script = format!("1\n{}6\n4\n", "4\n2\ny\n".repeat(8));
+    let output = run(&script);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert_contains(&output, "TIME IS UP");
+}
+
+#[test]
+fn damaged_life_support_fails_the_mission() {
+    let script = format!("1\n{}2\nL\n4\n", "1\ny\n".repeat(6));
+    let output = run(&script);
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert_contains(&output, "LIFE SUPPORT IS BROKEN");
+}
+
+#[test]
+fn invalid_mission_input_is_rejected() {
+    let output = run("1\nabc\n9\n6\n4\n");
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let text = stdout(&output);
+    assert!(
+        text.matches("[ERROR]").count() >= 2,
+        "expected two rejected mission inputs\n{text}"
+    );
+    assert_contains(&output, "YOU ENDED THE MISSION");
+}
