@@ -784,13 +784,7 @@ impl Mission {
 
             if option == 6 { break; } // End mission
 
-            if Mission::is_mission_failed(facility) {
-                let reason = Mission::mission_failed_reason(facility);
-                Mission::print_mission_failed_debrief_report(&reason, facility);
-
-                return;
-            }
-
+            // Check for success first
             if Mission::is_mission_successful(facility) {
                 Ui::print_info_msg("Mission Successful!");
 
@@ -799,6 +793,14 @@ impl Mission {
 
                 Ui::print_heading(&std::format!(
                     "You scored {mission_score}%. {mission_score_grade}"));
+                return;
+            }
+
+            // Then check for failure
+            if Mission::is_mission_failed(facility) {
+                let reason = Mission::mission_failed_reason(facility);
+                Mission::print_mission_failed_debrief_report(&reason, facility);
+
                 return;
             }
 
@@ -1155,13 +1157,10 @@ impl Mission {
 
     fn is_mission_failed(facility: &Facility) -> bool {
 
-        if  facility.get_resource_unit(ResourceType::Fuel) == 0 ||
-            facility.get_resource_unit(ResourceType::EmergencyPower) == 0 ||
-            facility.get_resource_unit(ResourceType::Time) == 0
+        if 
+            facility.get_resources().any_unavailable() ||
+            facility.get_system(SystemType::LifeSupport).is_damaged()
         { return true; }
-
-        // life support is damaged
-        let SystemStatus::Damaged = facility.get_system(SystemType::LifeSupport).get_status() else { return true; };
 
         // the player still has enough resources, mission is still on, 
         // so it is not failed
@@ -1184,7 +1183,7 @@ impl Mission {
             return String::from("Time is up");
         }
 
-        let SystemStatus::Damaged = facility.get_system(SystemType::LifeSupport).get_status() else {
+        if let SystemStatus::Damaged = facility.get_system(SystemType::LifeSupport).get_status() {
             return String::from("Life support is broken");
         };
 
