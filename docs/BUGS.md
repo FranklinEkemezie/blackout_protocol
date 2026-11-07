@@ -1,156 +1,122 @@
-# Known Bugs — Second Iteration
+# Known Bugs — Current
 
-This file is the offline record of specification deviations found after the structured refactor. Each section links to the corresponding GitHub issue.
+This file is the offline record of specification deviations that remain after the latest refactor. Each section links to the corresponding GitHub issue.
 
-At the time of writing, `cargo test` reports **20 passed, 6 failed**. The failures correspond to issues 1, 3, and 4 below. The other issues are interactive behaviours that the current test suite cannot reach without refactoring the action functions or adding process-level integration tests.
+At the time of writing, `cargo test --test flows` reports **15 passed, 8 failed**. The failures correspond to issues 3, 5, 8, and 9 below. Issues 6 and 7 are interactive/UI gaps that are not directly covered by the current flow tests.
 
 | # | Severity | Bug | Issue |
 |---|---|---|---|
-| 1 | Critical | Mission failure check is inverted for Life Support | [#1](https://github.com/FrankEkemezie/blackout_protocol/issues/1) |
-| 2 | High | Mission success is checked after failure | [#2](https://github.com/FrankEkemezie/blackout_protocol/issues/2) |
-| 3 | Critical | Life Support restoration leaves the system offline | [#3](https://github.com/FrankEkemezie/blackout_protocol/issues/3) |
-| 4 | High | Security repair and shutdown transitions are wrong | [#4](https://github.com/FrankEkemezie/blackout_protocol/issues/4) |
-| 5 | Critical | Actions do not enforce affordability before mutating state | [#5](https://github.com/FrankEkemezie/blackout_protocol/issues/5) |
-| 6 | Medium | Fault-free scoring bonus is always awarded | [#6](https://github.com/FrankEkemezie/blackout_protocol/issues/6) |
-| 7 | Low | Terminal messages and end-of-input handling are inaccurate | [#7](https://github.com/FrankEkemezie/blackout_protocol/issues/7) |
+| 3 | Critical | Life Support restoration uses the wrong power and time costs | [#3](https://github.com/FranklinEkemezie/blackout_protocol/issues/3) |
+| 5 | Critical | Actions do not validate affordability or system state before mutating | [#5](https://github.com/FranklinEkemezie/blackout_protocol/issues/5) |
+| 6 | Medium | Fault-free scoring bonus is always awarded | [#6](https://github.com/FranklinEkemezie/blackout_protocol/issues/6) |
+| 7 | Low | Terminal messages and end-of-input handling are inaccurate | [#7](https://github.com/FranklinEkemezie/blackout_protocol/issues/7) |
+| 8 | High | Evacuation Lift checks and repair list target the wrong systems | [#8](https://github.com/FranklinEkemezie/blackout_protocol/issues/8) |
+| 9 | High | Mission starts with 100 minutes instead of 30 | [#9](https://github.com/FranklinEkemezie/blackout_protocol/issues/9) |
 
 ---
 
-## 1. Mission failure check is inverted for Life Support
+## 3. Life Support restoration uses the wrong power and time costs
 
-**Issue:** [#1](https://github.com/FrankEkemezie/blackout_protocol/issues/1)
+**Issue:** [#3](https://github.com/FranklinEkemezie/blackout_protocol/issues/3)
 
-`Mission::is_mission_failed` (src/main.rs:1067) uses:
+Life Support now correctly returns to `Online`, but `Mission::restore_system` deducts:
 
 ```rust
-let SystemStatus::Damaged = systems_state.life_support else { return true; };
+facility.resources().decrease_by(8, 8, 2);
 ```
 
-`let ... else` runs the `else` branch when the pattern does **not** match. As a result, the mission is treated as failed whenever Life Support is `Online` or `Offline`, and is allowed to continue when Life Support is `Damaged` — the opposite of SPECS section 10.
+SPECS section 6 requires **8 fuel, 12 emergency power, and 5 minutes**. The current code undercharges power by 4 and time by 3 minutes.
 
-`Mission::mission_failed_reason` (src/main.rs:1089) has the same inversion, so it returns `"Life support is broken"` when Life Support is not damaged and returns an empty string when it is damaged.
-
-### Reproduction
-
-```bash
-printf '1\n1\ny\n' | cargo run
-```
-
-After inspecting the facility, the mission immediately ends with `LIFE SUPPORT IS BROKEN`, even though the debrief shows `Life Support: Offline`.
+This also changes mission scoring: a run that restores Life Support, Communications, and the Evacuation Lift before three evacuations finishes at 20 elapsed minutes instead of the specified 23, which wrongly earns the 20-minute bonus.
 
 ### Failing tests
 
-- `new_mission_is_not_failed`
-- `mission_failure_reason_is_empty_when_no_failure_condition_holds`
-- `mission_fails_when_life_support_is_damaged`
+- `restoring_life_support_uses_the_specified_costs`
+- `successful_mission_score_matches_the_specified_costs`
 
 ---
 
-## 2. Mission success is checked after failure
+## 5. Actions do not validate affordability or system state before mutating
 
-**Issue:** [#2](https://github.com/FrankEkemezie/blackout_protocol/issues/2)
+**Issue:** [#5](https://github.com/FranklinEkemezie/blackout_protocol/issues/5)
 
-`Mission::start_new` (src/main.rs:682-698) checks `is_mission_failed` before `is_mission_successful`. SPECS section 10 requires the opposite: if the final action evacuates the last occupant, the mission succeeds even if that action also reaches the time limit.
+Actions still mutate resources before proving the player can afford them:
 
-A final evacuation that exhausts time, fuel, or power is currently reported as a failure without a score.
+- `Mission::restore_system` runs the fault check before affordability and does not verify that fuel, power, and time are sufficient.
+- `Mission::repair_system` deducts 4 fuel, 5 power, and 3 minutes without checking availability.
+- `Mission::manage_emergency_power` performs Conserve Power and Emergency Shutdown without checking fuel.
 
----
+System state is also not validated before acting. Restoring an already-online system reaches `System::restore`, which panics instead of rejecting the action without a state change. The fault branch similarly runs before confirming the selected system is offline.
 
-## 3. Life Support restoration leaves the system offline
-
-**Issue:** [#3](https://github.com/FrankEkemezie/blackout_protocol/issues/3)
-
-`Facility::restore_life_support` (src/main.rs:581) assigns `SystemStatus::Offline` instead of `SystemStatus::Online`. The action message claims the system is online, but the state remains offline.
-
-The Life Support cost block in `Mission::restore_system` (src/main.rs:827-835) also advances time by 3 minutes instead of the specified 5 minutes.
-
-Because evacuation requires Life Support to be online, the mission is currently unwinnable.
-
-### Reproduction
-
-```bash
-printf '1\n2\nL\n' | cargo run
-```
-
-Observed:
-
-```text
-[INFO] The life support system is now restored and fully online!
-
-Elapsed Time:       3 minutes
-Life Support:       Offline
-```
-
-Expected: `Elapsed Time: 5 minutes` and `Life Support: Online`.
+SPECS sections 6-8 require rejection with no state change when resources are insufficient, and affordability must be checked before the fault mechanic.
 
 ### Failing test
 
-- `offline_systems_restore_online`
-
----
-
-## 4. Security repair and shutdown transitions are wrong
-
-**Issue:** [#4](https://github.com/FrankEkemezie/blackout_protocol/issues/4)
-
-`Facility::repair_security` (src/main.rs:629) checks and repairs `evacuation_lift` instead of `security`. Repairing Security therefore panics unless the Evacuation Lift is damaged, and otherwise silently repairs the lift.
-
-`Facility::shutdown_security` (src/main.rs:637) sets Security to `Damaged`. SPECS section 8 says Emergency Shutdown makes Security `Offline`, after which it is restored through the normal restoration process. Setting it to `Damaged` incorrectly requires a repair first.
-
-### Failing tests
-
-- `damaged_security_repairs_to_offline`
-- `emergency_shutdown_takes_security_offline`
-
----
-
-## 5. Actions do not enforce affordability before mutating state
-
-**Issue:** [#5](https://github.com/FrankEkemezie/blackout_protocol/issues/5)
-
-Three actions mutate resources before proving the player can afford them:
-
-- `Mission::restore_system` (src/main.rs:762) checks the fault condition before affordability and never checks fuel/power before deducting. Saturating subtraction clamps resources to zero, then the system is still restored.
-- `Mission::repair_system` (src/main.rs:877) deducts 4 fuel, 5 power, and 3 minutes without checking availability.
-- `Mission::manage_emergency_power` (src/main.rs:954) performs Conserve Power and Emergency Shutdown without checking fuel.
-
-The fault branch in `Mission::restore_system` also runs before validating that the selected system is offline, so a fault can damage an already-online system.
-
-SPECS sections 6-8 require the action to be rejected with no state change when resources are insufficient, and require affordability to be checked before the fault mechanic.
-
-These paths are not covered by the current automated suite because they are embedded in interactive terminal functions.
+- `restoring_an_already_online_system_is_rejected_without_crashing`
 
 ---
 
 ## 6. Fault-free scoring bonus is always awarded
 
-**Issue:** [#6](https://github.com/FrankEkemezie/blackout_protocol/issues/6)
+**Issue:** [#6](https://github.com/FranklinEkemezie/blackout_protocol/issues/6)
 
-`Mission::calculate_mission_score` (src/main.rs:1138) always adds the 10-point `COMPLETE_MISSION_WITHOUT_SYSTEM_FAULT` bonus. The code contains a `TODO` noting that faults are not tracked.
+`Mission::calculate_mission_score` always adds the 10-point `COMPLETE_MISSION_WITHOUT_SYSTEM_FAULT` bonus. The code still contains a `TODO` noting that faults are not tracked.
 
-SPECS section 11 awards the bonus only when no system fault occurred. A deterministic fault counter needs to be added to the mission state.
+SPECS section 11 awards the bonus only when no system fault occurred, so a deterministic fault counter is still needed in mission state.
 
 ---
 
 ## 7. Terminal messages and end-of-input handling are inaccurate
 
-**Issue:** [#7](https://github.com/FrankEkemezie/blackout_protocol/issues/7)
+**Issue:** [#7](https://github.com/FranklinEkemezie/blackout_protocol/issues/7)
 
-- Emergency Shutdown confirmation says `10 fuel units and 2 minutes`, but the action advances 4 minutes (src/main.rs:987).
-- Evacuation always prints `Evacuated 4 persons successfully!` even when fewer occupants remain (src/main.rs:1044-1047).
-- Restore System uses a letter table (`[L]`, `[C]`, `[S]`, `[E]`) rather than the numbered list required by SPECS section 6 (src/main.rs:739-756).
-- At end-of-input, `Ui::prompt_user` (src/main.rs:265-283) returns an empty string and `prompt_user_option` loops forever printing `Invalid input` instead of terminating.
+The Emergency Shutdown confirmation now correctly says 4 minutes. The remaining issues are:
+
+- Evacuation always prints `Evacuated 4 persons successfully!`, even when fewer occupants remain.
+- Restore System uses a letter table (`[L]`, `[C]`, `[S]`, `[E]`) instead of the numbered list required by SPECS section 6.
+- At end-of-input, `Ui::prompt_user` returns an empty string and `prompt_user_option` loops forever printing `Invalid input` instead of terminating.
 - The restore table heading says `MenuOption`, leaking an implementation alias into the UI.
 
 ---
 
-## Manual verification notes
+## 8. Evacuation Lift checks and repair list target the wrong systems
 
-The following commands were run against the current working tree:
+**Issue:** [#8](https://github.com/FranklinEkemezie/blackout_protocol/issues/8)
+
+Two system checks were copied from other systems:
+
+- `Mission::evacuate_occupants` checks Communications twice. The second check should check Evacuation Lift, so evacuation can proceed while the lift is offline.
+- `Mission::repair_system` checks Security twice when building the damaged-systems list. A damaged Evacuation Lift is never listed or selectable for repair.
+
+### Failing tests
+
+- `evacuation_is_rejected_when_the_evacuation_lift_is_offline`
+- `repair_menu_lists_a_damaged_evacuation_lift`
+
+---
+
+## 9. Mission starts with 100 minutes instead of 30
+
+**Issue:** [#9](https://github.com/FranklinEkemezie/blackout_protocol/issues/9)
+
+`INITIAL_FACILITY` initializes the time resource with 100 units. SPECS requires a 30-minute mission limit.
+
+Observed effects:
+
+- The mission menu starts at `100 minutes remaining`.
+- An inspection reports `98 minutes` remaining instead of `28`.
+- The time-limit failure never triggers at 30 minutes.
+
+### Failing tests
+
+- `mission_clock_starts_with_thirty_minutes`
+- `inspection_consumes_two_minutes_and_reports_readiness`
+- `mission_fails_when_the_thirty_minute_limit_is_reached`
+
+---
+
+## Reproducing the current failures
 
 ```bash
-printf '1\n1\ny\n' | timeout 3 cargo run
-printf '1\n2\nL\n' | timeout 3 cargo run
+cargo test --test flows
 ```
-
-The first command demonstrates issue 1. The second demonstrates issue 3.
