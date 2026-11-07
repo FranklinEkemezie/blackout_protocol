@@ -1078,7 +1078,7 @@ impl Mission {
 
                 // Shutdown nonessential systems
 
-                let confirm = Ui::confirm_action("This takes 10 fuel units and 2 minutes, and shuts down the security system");
+                let confirm = Ui::confirm_action("This takes 10 fuel units and 4 minutes, and shuts down the security system");
                 if ! confirm {
                     Ui::print_info_msg("Operation Cancelled!");
                     return;
@@ -1087,7 +1087,7 @@ impl Mission {
                 facility.resources().decrease_by(10, 0, 4);
                 facility.resources().increase_by(0, 20, 0);
 
-                facility.system(SystemType::Security).shutdown();
+                facility.system(SystemType::Security).turnoff();
 
             },
             _   => Ui::print_error_msg(&std::format!("Unknown option: {option}. Please try again!"))
